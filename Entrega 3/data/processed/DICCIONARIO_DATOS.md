@@ -1,10 +1,11 @@
 # Diccionario de datos — `dataset_analitico.csv`
 
-Matriz final del pipeline: **12.097 filas × 106 columnas**, una fila por aviso
+Matriz final del pipeline: **12.097 filas × 113 columnas**, una fila por aviso
 residencial de RE/MAX en CABA (10.749 en venta y 1.348 en alquiler), con las variables
-curadas, las extraídas del texto, las de accesibilidad y los cuatro KPIs materializados.
-Las 98 columnas de la 2da pre-entrega no cambian; esta entrega suma las 8 de la
-sección 9.
+curadas, las extraídas del texto, las de accesibilidad, los cuatro KPIs materializados y
+los costos del propietario. Esta entrega suma las 8 columnas de la sección 9 y las 7 de
+la sección 8.1, y cambia una de la 2da: `rent_neta_pct` pasa a usar el ABL de cada
+propiedad en lugar de un porcentaje plano.
 
 | Atributo | Valor |
 |---|---|
@@ -44,9 +45,9 @@ dataset_maestro.csv  (14.867 × 55)
   │               → 2.770 filas excluidas, con motivo, en dataset_excluidos.csv
   │ variables.py  RegEx sobre título + descripción + detalles → 35 dummies + 5 de estructura
   │ espacial.py   distancia a subte, tren, Metrobús, plazas y parques → 8 de accesibilidad
-  │ kpis.py       modelo Ridge de alquiler → 4 KPIs
+  │ kpis.py       modelo Ridge de alquiler → 4 KPIs; ABL, costos de entrada y TIR (costos.py)
   ▼
-dataset_analitico.csv  (12.097 × 106)
+dataset_analitico.csv  (12.097 × 113)
 ```
 
 ---
@@ -223,7 +224,8 @@ En validación de 5 particiones, fuera de muestra, obtiene un R² de 0,848 en lo
 y un error relativo mediano de 11,2%.
 
 **Los supuestos del KPI 2**, tomados de `supuestos.py`, son una vacancia de 5,88% y
-gastos del propietario de 14,04%.
+gastos del propietario que son de cada propiedad: 10,24% iguales para todas
+(administración, extraordinarias y mantenimiento) más su ABL (`gastos_pct`, sección 8.1).
 
 | Variable | Significado | Tipo | Unidad | Fuente | Transformaciones |
 |---|---|---|---|---|---|
@@ -232,11 +234,26 @@ gastos del propietario de 14,04%.
 | `n_alq_barrio` | Alquileres de entrenamiento en el barrio de la propiedad | Entero | Conteo | Derivada, `kpis.py` | 0 si el barrio no tiene alquileres |
 | `estimacion_confiable` | 1 si el barrio tiene al menos 10 alquileres | Binaria 0/1 | — | Derivada, `kpis.py` | `n_alq_barrio ≥ 10` (`MIN_ALQ_BARRIO`). 9.203 de 10.749 ventas en 1. Por debajo, el modelo extrapola desde otros barrios. **Los resúmenes de KPIs filtran por esta columna** |
 | `rent_bruta_pct` | **KPI 1**: rentabilidad bruta anual | Decimal | % anual | Derivada, `kpis.py` | `alquiler_est_usd_mes × 12 / venta_usd × 100`, a 2 decimales |
-| `rent_neta_pct` | **KPI 2**: rentabilidad neta anual | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 − 0,0588) × (1 − 0,1404)`, a 2 decimales. Las expensas ordinarias no se descuentan: las paga el inquilino |
+| `rent_neta_pct` | **KPI 2**: rentabilidad neta anual | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 − 0,0588) × (1 − gastos_pct / 100)`, a 2 decimales. Las expensas ordinarias no se descuentan: las paga el inquilino. Hasta la 2da entrega los gastos eran 14,04% para todas |
 | `meses_repago` | **KPI 3**: meses de alquiler para recuperar el precio | Entero | Meses | Derivada, `kpis.py` | `venta_usd / alquiler_est_usd_mes`, redondeado. Recupero simple: sin descuento, sin valor residual, sin inflación |
 | `error_estimacion` | Error relativo mediano del modelo en el tramo de superficie de la propiedad | Decimal, 5 valores | Proporción | Derivada, `kpis.py` | Error fuera de muestra por tramo: < 35 m² → 0,104; 35-50 → 0,097; 50-70 → 0,123; 70-100 → 0,154; 100+ → 0,174 |
 | `rent_bruta_min` | **KPI 4**: extremo inferior de la banda de incertidumbre | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 − error_estimacion)` |
 | `rent_bruta_max` | **KPI 4**: extremo superior de la banda | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 + error_estimacion)` |
+
+### 8.1 Costos del propietario y TIR (`kpis.py` y `costos.py`)
+
+Como las de la sección 8, solo existen para las ventas. Las fuentes de cada número
+están en `supuestos.py`, secciones 3b2 a 3g.
+
+| Variable | Significado | Tipo | Unidad | Fuente | Transformaciones |
+|---|---|---|---|---|---|
+| `abl_ars_mes` | ABL estimado de la propiedad (Impuesto Inmobiliario + Tasa ABL) | Decimal | ARS/mes | Derivada, `costos.py` | Ley 6927, arts. 41 a 45, sobre una VFH estimada: 14,99% × USD/m² mediano de su barrio y tipo × superficie × ARS 1.500. La proporción se calibra para que la unidad de referencia pague 3,80% (ver README) |
+| `abl_pct` | ABL como % del alquiler estimado | Decimal | % | Derivada, `costos.py` | `abl_ars_mes / (alquiler_est_usd_mes × 1.500) × 100` |
+| `gastos_pct` | Gastos del propietario que entran en el KPI 2 | Decimal | % del alquiler | Derivada, `kpis.py` | `10,24 + abl_pct` |
+| `costos_entrada_pct` | Costos de entrada del comprador, escenario base | Decimal | % del precio | Derivada, `costos.py` | Comisión 3% + escribano 1% + registrales 0,2% + mitad de sellos (1,35% hasta ARS 226,1 millones de precio, 1,75% arriba). Piso de cada rango publicado |
+| `refaccion_usd` | Costo de refacción mínima | Decimal | USD | Derivada, `costos.py` | Solo si `a_reciclar == 1`; si no, 0. Un baño por cada baño (USD 5.573), una cocina (USD 6.220) y pintura (ARS 33.500/m² × superficie) |
+| `alquiler_post_refaccion_usd_mes` | Alquiler que el modelo estima para la unidad ya refaccionada | Decimal | USD/mes | Derivada, `kpis.py` | Solo si `a_reciclar == 1`. Mismo modelo, con `a_reciclar = 0` y `reciclado = 1` |
+| `tir_5a_pct` | Tasa interna de retorno a 5 años: la cifra comparable con la banda de retorno mínimo | Decimal | % anual | Derivada, `costos.py` | Pagar precio + costos de entrada + refacción; cobrar la neta cada año (con el alquiler post-refacción en las unidades a reciclar); revender al mismo precio en dólares al quinto año. Sin apreciación ni costos de salida |
 
 ## 9. Accesibilidad (`espacial.py`)
 
@@ -283,3 +300,10 @@ limitaciones están en `informe/FUENTES_EXTERNAS.md` (fichas 6 a 9).
    ven vías, autopistas ni el Riachuelo, ni la frecuencia del servicio. Un aviso a
    300 m de una estación con un tren por hora no está tan conectado como uno a 300 m
    de un subte, aunque las dos columnas digan lo mismo.
+8. **`abl_ars_mes` es una estimación, no la boleta.** La VFH de cada partida no se
+   publica: se aproxima desde el precio de mercado del barrio. La boleta real puede ser
+   menor por la bonificación del art. 44 de la Ley 6927, que limita la suba de cada
+   cuota.
+9. **`tir_5a_pct` supone que la unidad se revende al mismo precio en dólares.** No
+   estima apreciación ni descuenta costos de salida, meses de obra sin alquiler ni
+   riesgo legal.

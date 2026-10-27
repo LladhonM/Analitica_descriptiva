@@ -1,0 +1,106 @@
+
+============================================================================
+H2 — PRECIO DEL M2 Y DISTANCIA AL TRANSPORTE
+============================================================================
+Fecha: 2026-10-27 18:07
+Base: 10,743 avisos de venta con precio del m2 y coordenadas (todas las ventas:
+H2 es sobre el precio, no depende de la estimacion del alquiler).
+Magnitud y forma; el contraste formal con p-valor va en el paso de tests.
+
+============================================================================
+1. CENTRALIDAD CONTRA ACCESIBILIDAD: pendiente sin y con barrio fijo
+============================================================================
+R2 del barrio solo: 0.422
+
+    medida         sin barrio    con barrio   R2 que agrega
+    combinada        -12.9%/km       -6.2%/km          0.0018
+    subte             -7.4%/km       -3.4%/km          0.0013
+    tren             -14.2%/km       -4.7%/km          0.0019
+    metrobus           1.9%/km       -3.1%/km          0.0014
+
+Sin barrio fijo, la pendiente mezcla accesibilidad con centralidad. Con barrio
+fijo, lo que queda es la diferencia entre avisos del mismo barrio.
+
+============================================================================
+2. PERFIL POR TRAMOS DE DISTANCIA (efecto sobre el precio del m2, contra el primer tramo)
+============================================================================
+combinada:
+    especificacion                     0-300     300-600   600-1,000 1,000-1,500      1,500+
+    avisos                             4,387       3,658       2,023         512         163
+    barrio                              0.0%        2.4%       -1.7%       -8.5%      -16.0%
+    barrio + controles                  0.0%        2.3%       -0.6%       -6.0%       -7.2%
+    barrio + controles, deptos          0.0%        2.3%       -0.6%       -6.2%       -1.6%
+
+subte:
+    especificacion                     0-300     300-600   600-1,000 1,000-1,500      1,500+
+    avisos                             2,656       2,769       1,938         958       2,422
+    barrio                              0.0%        5.2%        1.7%       -0.2%       -8.4%
+    barrio + controles                  0.0%        2.1%        0.3%       -1.5%       -6.1%
+    barrio + controles, deptos          0.0%        2.1%        0.5%       -1.6%       -5.8%
+
+tren:
+    especificacion                     0-300     300-600   600-1,000 1,000-1,500      1,500+
+    avisos                               651       1,921       2,868       2,981       2,322
+    barrio                              0.0%        4.1%        4.1%        2.9%       -3.9%
+    barrio + controles                  0.0%        3.7%        3.8%        3.1%       -0.9%
+    barrio + controles, deptos          0.0%        3.2%        3.6%        3.2%        0.1%
+
+metrobus:
+    especificacion                     0-300     300-600   600-1,000 1,000-1,500      1,500+
+    avisos                             1,788       1,739       1,951       1,776       3,489
+    barrio                              0.0%       -1.4%       -0.9%       -3.6%       -6.2%
+    barrio + controles                  0.0%        1.4%        2.0%        1.6%       -1.3%
+    barrio + controles, deptos          0.0%        1.2%        2.2%        2.1%        0.6%
+
+
+============================================================================
+3. RADIO DE INFLUENCIA: efecto lineal solo mas alla de un umbral
+============================================================================
+Modelo: log(m2) = barrio + controles + b x max(distancia - umbral, 0).
+Si la distancia no importa hasta el umbral y despues si, el mejor umbral es el radio.
+
+      umbral   por km mas alla        R2   avisos mas alla
+       400 m            -6.1%   0.71292             4,874
+       600 m            -8.1%   0.71296             2,693
+       800 m            -8.2%   0.71252             1,284
+      1000 m            -6.8%   0.71214               672
+      1200 m            -3.8%   0.71194               396
+      1500 m             7.5%   0.71196               163
+
+Mejor ajuste: umbral de 600 m. La diferencia de R2 entre el mejor y el peor
+umbral es 0.00102: el quiebre no esta marcado con precision, se lee
+como un rango y no como un numero.
+
+============================================================================
+4. ANTECEDENTE: correlacion intra-barrio a mas y a menos de 1 km
+============================================================================
+Spearman entre el precio del m2 descontado el promedio de su barrio y la distancia,
+separando los avisos a mas y a menos de 1 km de la red.
+
+    subte      hasta 1 km      7,368 avisos   Spearman +0.058
+    subte      a mas de 1 km   3,375 avisos   Spearman -0.000
+    combinada  hasta 1 km     10,071 avisos   Spearman +0.014
+    combinada  a mas de 1 km     672 avisos   Spearman +0.005
+
+============================================================================
+5. COMPOSICION: que hay lejos de la red
+============================================================================
+    tramo (m)               casa  departamento            ph
+    0-300                   3.4%         87.5%          9.0%
+    300-600                 6.1%         81.0%         12.8%
+    600-1,000               9.6%         73.1%         17.3%
+    1,000-1,500            14.3%         60.9%         24.8%
+    1,500+                 24.5%         35.6%         39.9%
+
+Por eso el perfil se informa tambien con controles y solo para departamentos.
+
+============================================================================
+LECTURA
+============================================================================
+- Con el barrio en el modelo, la distancia a la red agrega 0.0018 de R2 (el barrio solo explica 0.422).
+- Hasta 1 km, con controles: tramos 300-600, 600-1,000 m, +2.3%, -0.6% contra el primero.
+- Entre 1 y 1,5 km el m2 vale -6.0% (-6.2% en departamentos), con 512 avisos.
+- Mas alla de 1,5 km: -7.2% (-1.6% en departamentos), con 163 avisos, 64% de ellos casas y PH.
+- Radio: el modelo con quiebre ajusta mejor con umbral de 600 m (-8.1% por km mas alla), sin un optimo marcado.
+
+Archivo: data/processed/h2_perfil_distancia.csv (60 filas)

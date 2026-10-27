@@ -28,15 +28,24 @@ de `variables.py` y no de la busqueda por subcadena. Este script mide si esa
 correccion mejora la estimacion, entrenando las dos versiones sobre los mismos
 folds. Si limpiar las variables no cambiara nada, convendria saberlo.
 
+QUE CAMBIA EN LA 3RA ENTREGA
+----------------------------
+- El ABL deja de ser un porcentaje plano: se calcula por propiedad con la
+  Ley Tarifaria (costos.py). Los gastos del KPI 2 pasan a ser de cada una.
+- Costos de entrada y refaccion, y la TIR a 5 anios que los incluye
+  (tir_5a_pct): la cifra comparable con la banda de retorno minimo.
+- El reporte mide el ANTES (ABL plano, sin costos de entrada) y el DESPUES.
+
 Uso:
-    py src/kpis.py
-    py src/kpis.py --vacancia 10 --gastos 15
+    py src/kpis.py                          # ABL segmentado (supuestos.py)
+    py src/kpis.py --vacancia 8 --gastos 12 # gastos planos, como la 1ra entrega
 
 Salidas (en data/processed/):
     dataset_analitico.csv   LA matriz final: 12.097 filas con KPIs y variables
-    ranking_barrios.csv     rentabilidad mediana por barrio
+    ranking_barrios.csv     rentabilidad neta mediana por barrio
     modelo_alquiler.joblib  pipeline entrenado + smearing + error por segmento
-    sensibilidad_supuestos.csv  KPI 2 y ranking en la grilla de vacancia x gastos
+    sensibilidad_supuestos.csv  KPI 2, TIR y ranking en las grillas de sensibilidad
+    antes_despues_kpis.csv  neta mediana, barrios sobre el piso y top 5, antes y despues
     reporte_kpis.txt        log completo
 """
 
@@ -52,6 +61,8 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, cross_val_predict
 
+import costos as C
+import eda
 import modelo_alquiler as M
 import supuestos as S
 
@@ -62,6 +73,8 @@ COLUMNAS_KPI = [
     "alquiler_est_usd_mes", "alquiler_est_m2", "n_alq_barrio",
     "estimacion_confiable", "rent_bruta_pct", "rent_neta_pct",
     "meses_repago", "error_estimacion", "rent_bruta_min", "rent_bruta_max",
+    "abl_ars_mes", "abl_pct", "gastos_pct",
+    "costos_entrada_pct", "refaccion_usd", "alquiler_post_refaccion_usd_mes", "tir_5a_pct",
 ]
 
 
@@ -217,108 +230,277 @@ def resumen_kpis(out: pd.DataFrame, rep: M.Reporte) -> None:
     rep(f"    no se distingue del error de estimacion.")
 
 
-def sensibilidad(out: pd.DataFrame, rank: pd.DataFrame, rep: M.Reporte) -> pd.DataFrame:
+# ==========================================================================
+# ABL SEGMENTADO, COSTOS DE ENTRADA Y TIR
+# ==========================================================================
+
+def aplicar_abl(vta: pd.DataFrame, rep: M.Reporte) -> tuple[pd.DataFrame, float]:
+    """Agrega el ABL de cada venta y devuelve la proporcion VFH / mercado calibrada."""
+    rep.titulo("ABL SEGMENTADO (Ley Tarifaria 6927, arts. 41 a 45)")
+    proporcion = C.calibrar_proporcion(vta)
+    vta = vta.join(C.abl_por_propiedad(vta, proporcion))
+    ref = C.es_referencia(vta)
+    rep(f"Proporcion VFH / valor de mercado calibrada : {proporcion * 100:.2f}% "
+        f"(tope legal {S.VFH_TOPE_SOBRE_MERCADO * 100:.0f}%, Codigo Fiscal art. 288)")
+    rep(f"    con ella, la unidad de referencia ({int(ref.sum())} ventas de 2 amb y 40-60 m2) paga "
+        f"{vta.loc[ref, 'abl_pct'].median():.2f}% del alquiler, el ABL_PCT plano")
+    rep("")
+    a = vta["abl_pct"]
+    rep(f"ABL como % del alquiler: mediana {a.median():.2f}%   p10 {a.quantile(.1):.2f}%   "
+        f"p90 {a.quantile(.9):.2f}%   (plano: {S.ABL_PCT:.2f}% para todas)")
+    rep(f"ABL en pesos por mes   : mediana {vta['abl_ars_mes'].median():,.0f}   "
+        f"p10 {vta['abl_ars_mes'].quantile(.1):,.0f}   p90 {vta['abl_ars_mes'].quantile(.9):,.0f}")
+    rep("")
+    rep("Por que se mueve: el ABL sigue al valor del inmueble y el alquiler no lo sigue")
+    rep("igual (H1). Por quintil de rentabilidad bruta:")
+    q = pd.qcut(vta["alquiler_est_usd_mes"] * 12 / vta["venta_usd"], 5,
+                labels=["Q1 (rinde menos)", "Q2", "Q3", "Q4", "Q5 (rinde mas)"])
+    for k, g in vta.groupby(q, observed=True)["abl_pct"]:
+        rep(f"    {k:<18} ABL mediano {g.median():>5.2f}% del alquiler")
+    return vta, proporcion
+
+
+def alquiler_post_refaccion(vta: pd.DataFrame, pipe, smear: float) -> pd.Series:
     """
-    Cuanto dependen los resultados de la vacancia y los gastos.
-
-    Recorre la grilla de supuestos.py y, para cada par, recalcula la neta de
-    cada propiedad desde la bruta. Reporta tres cosas: el nivel (mediana
-    neta), el ranking de barrios y cuantas propiedades y barrios superan el
-    piso del retorno minimo.
-
-    El ranking no puede moverse, y se calcula igual para mostrarlo en vez de
-    afirmarlo: vacancia y gastos entran como un factor unico para todas las
-    propiedades, y multiplicar todo por la misma constante no cambia ningun
-    orden. Lo que si depende de los supuestos es el nivel, y con el nivel,
-    cuantas unidades cruzan el umbral contra el que se las compara.
+    Alquiler que el modelo estima para las unidades a reciclar una vez
+    refaccionadas: las mismas variables, con a_reciclar = 0 y reciclado = 1.
+    Sin esto, la refaccion se cobraria sin su beneficio.
     """
-    rep.titulo("SENSIBILIDAD A LOS SUPUESTOS DE VACANCIA Y GASTOS")
+    rec = vta["a_reciclar"] == 1
+    X = vta.loc[rec, M.NUMERICAS + M.CATEGORICAS + M.DUMMIES].copy()
+    X["a_reciclar"], X["reciclado"] = 0, 1
+    post = pd.Series(np.nan, index=vta.index)
+    if rec.any():
+        post.loc[rec] = (np.exp(pipe.predict(X)) * smear).round(2)
+    return post
 
-    ok = out[(out["estimacion_confiable"] == 1) & out["rent_bruta_pct"].notna()]
-    barrios = rank.index
-    base_barrio = ok[ok["barrio"].isin(barrios)].groupby("barrio")["rent_bruta_pct"].median()
+
+def neta_escenario(vta: pd.DataFrame, vacancia: float, abl: str, abl_tope: pd.Series,
+                   post: bool = False) -> pd.Series:
+    """
+    Rentabilidad neta de cada venta bajo una definicion del ABL:
+      plano            el ABL_PCT de la 2da entrega para todas
+      segmentado       el de cada propiedad, con la proporcion calibrada
+      segmentado_tope  el de cada propiedad, con la VFH en el tope legal
+    Con post=True, las unidades a reciclar cobran el alquiler post-refaccion.
+    """
+    alq = vta["alquiler_est_usd_mes"]
+    if post:
+        alq = vta["alquiler_post_refaccion_usd_mes"].fillna(alq)
+    bruta = alq * 12 / vta["venta_usd"] * 100
+    if abl == "plano":
+        gastos = S.GASTOS_PCT
+    else:
+        ars = vta["abl_ars_mes"] if abl == "segmentado" else abl_tope
+        gastos = S.GASTOS_SIN_ABL_PCT + ars / (alq * S.TC_ARS_USD) * 100
+    return (bruta * (1 - vacancia / 100) * (1 - gastos / 100)).round(2)
+
+
+def tir_escenario(vta: pd.DataFrame, vacancia: float, abl: str, entrada: str,
+                  abl_tope: pd.Series) -> pd.Series:
+    """TIR a 5 anios con los costos de entrada y la refaccion del escenario."""
+    if entrada == "sin":
+        return neta_escenario(vta, vacancia, abl, abl_tope)
+    neta = neta_escenario(vta, vacancia, abl, abl_tope, post=True)
+    inicial = (C.costos_entrada_pct(vta["venta_usd"], entrada)
+               + C.refaccion_usd(vta, entrada) / vta["venta_usd"] * 100)
+    return pd.Series(C.tir(neta, inicial), index=vta.index).round(2)
+
+
+def costos_y_tir(vta: pd.DataFrame, vacancia: float, rep: M.Reporte) -> pd.DataFrame:
+    """Costos de entrada, refaccion y TIR a 5 anios del escenario base."""
+    rep.titulo(f"COSTOS DE ENTRADA, REFACCION Y TIR A {S.HORIZONTE_ANIOS} ANIOS")
+    vta = vta.copy()
+    vta["costos_entrada_pct"] = C.costos_entrada_pct(vta["venta_usd"], "base")
+    vta["refaccion_usd"] = C.refaccion_usd(vta, "base")
+    neta_post = (vta["alquiler_post_refaccion_usd_mes"].fillna(vta["alquiler_est_usd_mes"])
+                 * 12 / vta["venta_usd"] * 100 * (1 - vacancia / 100)
+                 * (1 - vta["gastos_pct_post"] / 100))
+    inicial = vta["costos_entrada_pct"] + vta["refaccion_usd"] / vta["venta_usd"] * 100
+    vta["tir_5a_pct"] = pd.Series(C.tir(neta_post.round(2), inicial), index=vta.index).round(2)
+
+    ok = vta[vta["estimacion_confiable"] == 1]
+    e = ok["costos_entrada_pct"]
+    rep(f"Costos de entrada (escenario base, piso de cada rango): mediana {e.median():.2f}% del precio")
+    rep(f"    comision {S.COMISION_COMPRADOR_PCT[0]}% + escribano {S.ESCRIBANO_PCT[0]}% + "
+        f"registrales {S.REGISTRALES_PCT[0]}% + mitad de sellos "
+        f"({S.SELLOS_ALICUOTA_REDUCIDA_PCT * S.SELLOS_PARTE_COMPRADOR:.2f}% hasta ARS "
+        f"{S.SELLOS_UMBRAL_ARS / 1e6:,.1f}M, {S.SELLOS_ALICUOTA_PCT * S.SELLOS_PARTE_COMPRADOR:.2f}% arriba)")
+    alto = C.costos_entrada_pct(ok["venta_usd"], "alto")
+    rep(f"    escenario alto (techo de cada rango): mediana {alto.median():.2f}%")
+    rep("")
+    t = ok["tir_5a_pct"]
+    rep(f"TIR a {S.HORIZONTE_ANIOS} anios (neta + costos de entrada + refaccion, reventa al mismo precio):")
+    rep(f"    mediana {t.median():.2f}%   p25 {t.quantile(.25):.2f}%   p75 {t.quantile(.75):.2f}%")
+    rep(f"    contra la neta mediana {ok['rent_neta_pct'].median():.2f}%: los costos de entrada restan "
+        f"{ok['rent_neta_pct'].median() - t.median():.2f} pp por anio en el horizonte.")
+    rep("")
+
+    # Refaccion contra el descuento de H3. Si una unidad a reciclar cotiza un
+    # d% mas barata por m2 que sus comparables, el descuento expresado sobre
+    # SU precio es d / (1 - d). La refaccion la convierte en oportunidad solo
+    # si cuesta menos que eso. El descuento se calcula como en el notebook 03
+    # de la 2da entrega: dentro de cada celda barrio x tramo de superficie.
+    t3 = eda.efecto_estratificado(vta[vta["venta_m2_usd"].notna()], "a_reciclar", "venta_m2_usd",
+                                  ["barrio", "superficie_rango"], S.MIN_GRUPO_ESTRATO)
+    d = -eda.mediana_ponderada(t3["diferencia"] / t3["mediana_0"], t3["peso"])
+    umbral = d / (1 - d) * 100
+    rec = ok[ok["a_reciclar"] == 1]
+    rep(f"Unidades a reciclar en la base: {len(rec)}")
+    rep(f"    descuento del m2 contra comparables de su celda barrio x superficie (H3): "
+        f"{d * 100:.1f}% en {len(t3)} celdas;")
+    rep(f"    sobre el precio de la unidad a reciclar equivale a {umbral:.1f}%")
+    for esc in ("base", "alto"):
+        r = C.refaccion_usd(rec, esc) / rec["venta_usd"] * 100
+        rep(f"    refaccion {esc:<4}: mediana {r.median():5.1f}% del precio; "
+            f"la cubre el descuento en {(r < umbral).mean() * 100:5.1f}% de las unidades")
+    sube = (rec["alquiler_post_refaccion_usd_mes"] / rec["alquiler_est_usd_mes"] - 1) * 100
+    rep(f"    alquiler estimado tras refaccionar: {sube.median():+.1f}% (mediana)")
+    rep("")
+    rep("No incluye: meses de obra sin alquiler, costos de salida ni riesgo legal")
+    rep("(limitacion declarada en supuestos.py, seccion 3g).")
+    return vta
+
+
+def antes_y_despues(vta: pd.DataFrame, abl_tope: pd.Series, rep: M.Reporte) -> pd.DataFrame:
+    """
+    El entregable del ajuste: cuanto se mueven la neta mediana, los barrios que
+    superan el piso y el ranking, del ABL plano al segmentado y de la neta a la
+    TIR con costos de entrada.
+    """
+    rep.titulo("ANTES Y DESPUES")
+    ok = vta[vta["estimacion_confiable"] == 1]
+    en_ranking = ok.groupby("barrio")["venta_usd"].transform("size") >= S.MIN_VENTAS_BARRIO
     piso = S.RETORNO_MIN_PISO_PCT
-    top_base = list(base_barrio.sort_values(ascending=False).index[:5])
+    filas = {
+        "antes: neta, ABL plano": neta_escenario(ok, S.VACANCIA_PCT, "plano", abl_tope),
+        "neta, ABL segmentado": ok["rent_neta_pct"],
+        "TIR 5a, ABL segm. + entrada": ok["tir_5a_pct"],
+    }
+    salida = []
+    rep(f"Base: {len(ok):,} ventas con estimacion confiable; barrios con {S.MIN_VENTAS_BARRIO}+ ventas. "
+        f"Piso de la banda: {piso:.2f}%")
+    rep("")
+    for nombre, s in filas.items():
+        b = s[en_ranking].groupby(ok.loc[en_ranking, "barrio"]).median()
+        orden = (b.rename("v").reset_index().sort_values(["v", "barrio"], ascending=[False, True]))
+        sobre = list(orden.loc[orden["v"] >= piso, "barrio"])
+        top5 = list(orden["barrio"][:5])
+        rep(f"{nombre}")
+        rep(f"    mediana {s.median():.2f}%   barrios sobre el piso: {len(sobre)} {sobre}")
+        rep(f"    top 5: {', '.join(top5)}")
+        salida.append({"escenario": nombre, "mediana_pct": round(float(s.median()), 2),
+                       "barrios_sobre_piso": len(sobre), "barrios": "; ".join(sobre),
+                       "top5": "; ".join(top5)})
+    plano = filas["antes: neta, ABL plano"][en_ranking].groupby(ok.loc[en_ranking, "barrio"]).median()
+    segm = ok.loc[en_ranking].groupby("barrio")["rent_neta_pct"].median()
+    rep("")
+    rep(f"Spearman del ranking de barrios, ABL plano contra segmentado: "
+        f"{plano.corr(segm, method='spearman'):.4f}")
+    mov = (segm.rank(ascending=False) - plano.rank(ascending=False)).sort_values()
+    rep(f"Mayores subidas: {', '.join(f'{b} {-int(x):+d}' for b, x in mov.head(3).items())}")
+    rep(f"Mayores bajadas: {', '.join(f'{b} {-int(x):+d}' for b, x in mov.tail(3).items())}")
+    return pd.DataFrame(salida)
+
+
+def sensibilidad(vta: pd.DataFrame, abl_tope: pd.Series, rank: pd.DataFrame,
+                 rep: M.Reporte) -> pd.DataFrame:
+    """
+    Cuanto dependen los resultados de los supuestos y de las definiciones.
+
+    Dos grillas:
+      A. vacancia x gastos planos: la de la 2da entrega, con el ABL dentro de
+         un porcentaje unico. Mueve el nivel, no el orden.
+      B. vacancia x definicion del ABL x costos de entrada: con el ABL
+         segmentado, el orden de los barrios ya puede cambiar; con costos de
+         entrada, la metrica pasa a ser la TIR a 5 anios.
+    Para cada escenario: mediana, propiedades y barrios sobre el piso de la
+    banda, y cuanto se parece el ranking al materializado.
+    """
+    rep.titulo("SENSIBILIDAD A SUPUESTOS Y DEFINICIONES")
+    ok = vta[vta["estimacion_confiable"] == 1]
+    barrios = rank.index
+    en = ok["barrio"].isin(barrios)
+    base_barrio = ok[en].groupby("barrio")["rent_neta_pct"].median()
+    top_base = list(base_barrio.rename("v").reset_index()
+                    .sort_values(["v", "barrio"], ascending=[False, True])["barrio"][:5])
+    piso = S.RETORNO_MIN_PISO_PCT
+
+    def fila(serie: pd.Series, **campos) -> dict:
+        b = serie[en].groupby(ok.loc[en, "barrio"]).median()
+        top = list(b.rename("v").reset_index().sort_values(["v", "barrio"], ascending=[False, True])["barrio"][:5])
+        return {**campos,
+                "mediana": round(float(serie.median()), 2),
+                "p25": round(float(serie.quantile(.25)), 2),
+                "p75": round(float(serie.quantile(.75)), 2),
+                "pct_prop_sobre_piso": round(float((serie >= piso).mean() * 100), 1),
+                "barrios_sobre_piso": int((b >= piso).sum()),
+                "spearman_ranking_vs_base": round(float(b.corr(base_barrio, method="spearman")), 4),
+                "top5_igual": top == top_base}
 
     filas = []
+    # A. La grilla de la 2da entrega: gastos planos.
     for vac in S.SENSIBILIDAD_VACANCIA:
         for gas in S.SENSIBILIDAD_GASTOS:
-            f = (1 - vac / 100) * (1 - gas / 100)
-            # Mismo redondeo que la columna materializada: si no, un escenario
-            # identico al vigente daria una proporcion distinta a la del dataset.
-            neta = (ok["rent_bruta_pct"] * f).round(2)
-            neta_barrio = base_barrio * f
-            filas.append({
-                "vacancia_pct": vac,
-                "gastos_pct": gas,
-                "factor_neto": round(f, 4),
-                "neta_mediana": round(float(neta.median()), 2),
-                "neta_p25": round(float(neta.quantile(.25)), 2),
-                "neta_p75": round(float(neta.quantile(.75)), 2),
-                "pct_prop_sobre_piso": round(float((neta >= piso).mean() * 100), 1),
-                "barrios_sobre_piso": int((neta_barrio >= piso).sum()),
-                "spearman_ranking_vs_base": round(float(
-                    neta_barrio.corr(base_barrio, method="spearman")), 4),
-                "top5_igual": list(neta_barrio.sort_values(ascending=False).index[:5]) == top_base,
-            })
+            neta = (ok["rent_bruta_pct"] * (1 - vac / 100) * (1 - gas / 100)).round(2)
+            filas.append(fila(neta, grilla="A", vacancia_pct=vac, gastos_pct=gas,
+                              abl="plano", entrada="sin", metrica="neta"))
+    # B. Definicion del ABL y costos de entrada.
+    for vac in S.SENSIBILIDAD_VACANCIA:
+        for abl in S.SENSIBILIDAD_ABL:
+            for ent in S.SENSIBILIDAD_ENTRADA:
+                m = tir_escenario(ok, vac, abl, ent, abl_tope.loc[ok.index])
+                filas.append(fila(m, grilla="B", vacancia_pct=vac, gastos_pct=np.nan,
+                                  abl=abl, entrada=ent, metrica="neta" if ent == "sin" else "tir_5a"))
     t = pd.DataFrame(filas)
 
-    def matriz(col: str, fmt: str) -> None:
-        m = t.pivot(index="vacancia_pct", columns="gastos_pct", values=col)
-        rep("vacancia \\ gastos".ljust(18) + "".join(f"{g:>9.0f}%" for g in m.columns))
-        for v, fila in m.iterrows():
-            rep(f"{v:>16.0f}% " + "".join(f"{x:>10{fmt}}" for x in fila))
-
-    rep(f"Base: {len(ok):,} ventas con estimacion confiable; "
-        f"{len(barrios)} barrios del ranking ({S.MIN_VENTAS_BARRIO}+ ventas)")
-    rep(f"Piso del retorno minimo: {piso:.2f}% (supuestos.RETORNO_MIN_PISO_PCT)")
+    rep(f"Base: {len(ok):,} ventas con estimacion confiable; {len(barrios)} barrios del ranking "
+        f"({S.MIN_VENTAS_BARRIO}+ ventas). Piso: {piso:.2f}%. El ranking base es el materializado "
+        f"(neta con ABL segmentado).")
     rep("")
-    rep("Rentabilidad neta mediana (%):")
-    matriz("neta_mediana", ".2f")
+    a = t[t["grilla"] == "A"]
+    rep("A. Gastos planos (2da entrega): neta mediana (%)")
+    m = a.pivot(index="vacancia_pct", columns="gastos_pct", values="mediana")
+    rep("vacancia \\ gastos".ljust(18) + "".join(f"{g:>9.0f}%" for g in m.columns))
+    for v, f in m.iterrows():
+        rep(f"{v:>16.0f}% " + "".join(f"{x:>10.2f}" for x in f))
     rep("")
-    rep(f"Propiedades con neta >= {piso:.2f}% (% de la base):")
-    matriz("pct_prop_sobre_piso", ".1f")
-    rep("")
-    rep(f"Barrios con neta mediana >= {piso:.2f}% (de {len(barrios)}):")
-    matriz("barrios_sobre_piso", ".0f")
-    rep("")
-
-    # El escenario vigente (5,88 / 14,04) no cae sobre la grilla redonda:
-    # se reporta aparte para poder ubicarlo entre las celdas.
-    f0 = (1 - S.VACANCIA_PCT / 100) * (1 - S.GASTOS_PCT / 100)
-    neta0 = (ok["rent_bruta_pct"] * f0).round(2)
-    rep(f"Escenario de supuestos.py (vacancia {S.VACANCIA_PCT:.2f}%, gastos {S.GASTOS_PCT:.2f}%): "
-        f"neta mediana {neta0.median():.2f}%, "
-        f"{(neta0 >= piso).mean() * 100:.1f}% de las propiedades y "
-        f"{int(((base_barrio * f0) >= piso).sum())} barrios sobre el piso.")
-    rep("")
-
-    ext = t.iloc[[0, -1]]
-    rep(f"Del escenario mas favorable al mas adverso de la grilla, la neta mediana va de "
-        f"{ext['neta_mediana'].iloc[0]:.2f}% a {ext['neta_mediana'].iloc[1]:.2f}% "
-        f"({ext['neta_mediana'].iloc[0] - ext['neta_mediana'].iloc[1]:.2f} pp).")
-    rep(f"Spearman minimo del ranking contra el base: {t['spearman_ranking_vs_base'].min():.4f}; "
-        f"top 5 identico en {int(t['top5_igual'].sum())} de {len(t)} escenarios.")
-    rep("Lectura: los supuestos mueven el NIVEL de la rentabilidad y, con el,")
-    rep("cuantas unidades superan el retorno minimo; no mueven QUE barrio rinde")
-    rep("mas. El ranking es robusto a estos supuestos porque se aplican iguales")
-    rep("a todos. Dejaria de serlo con una vacancia distinta por barrio, que")
-    rep("este trabajo no mide.")
+    b = t[t["grilla"] == "B"].copy()
+    b["col"] = b["abl"] + " / " + b["entrada"]
+    for valor, titulo in [("mediana", "neta (sin entrada) o TIR 5a (con entrada), mediana (%)"),
+                          ("barrios_sobre_piso", f"barrios con mediana >= {piso:.2f}% (de {len(barrios)})"),
+                          ("spearman_ranking_vs_base", "Spearman del ranking contra el base")]:
+        rep(f"B. ABL x costos de entrada: {titulo}")
+        p = b.pivot(index="vacancia_pct", columns="col", values=valor)
+        p = p[[f"{x} / {y}" for x in S.SENSIBILIDAD_ABL for y in S.SENSIBILIDAD_ENTRADA]]
+        rep("vacancia".ljust(10) + "".join(f"{c.replace('segmentado', 'segm'):>21}" for c in p.columns))
+        for v, f in p.iterrows():
+            rep(f"{v:>8.0f}% " + "".join(f"{x:>21.2f}" if valor != "barrios_sobre_piso" else f"{x:>21.0f}"
+                                         for x in f))
+        rep("")
+    # La lectura se arma con las cifras de la grilla, para que no pueda
+    # afirmar algo distinto de lo que muestran las tablas de arriba.
+    sin = b[b["entrada"] == "sin"]
+    seg = b[b["abl"] == "segmentado"]
+    rep(f"Top 5 igual al base en {int(b['top5_igual'].sum())} de {len(b)} escenarios.")
+    rep(f"Lectura: la mediana va de {b['mediana'].min():.2f}% a {b['mediana'].max():.2f}% en la grilla B, "
+        f"y los barrios sobre el piso, de {int(b['barrios_sobre_piso'].min())} a "
+        f"{int(b['barrios_sobre_piso'].max())}.")
+    rep(f"    La definicion del ABL lleva el Spearman del ranking hasta "
+        f"{sin['spearman_ranking_vs_base'].min():.4f}; los costos de entrada, hasta "
+        f"{seg['spearman_ranking_vs_base'].min():.4f}.")
     return t
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    # Entra despues de espacial.py, para que la matriz final lleve tambien las
-    # distancias a la red de transporte.
     p.add_argument("--input", default="data/processed/dataset_espacial.csv")
     p.add_argument("--outdir", default="data/processed")
-    # Los defaults salen de supuestos.py y no de las constantes del modelo:
-    # ahi estan con fuente y desagregados. El modelo sigue recibiendo un solo
-    # numero de gastos, que es la suma de los cuatro componentes.
     p.add_argument("--vacancia", type=float, default=S.VACANCIA_PCT)
-    p.add_argument("--gastos", type=float, default=S.GASTOS_PCT)
+    # Sin --gastos, el ABL se calcula por propiedad (costos.py). Con --gastos,
+    # un porcentaje plano para todas, como en la 1ra y la 2da entrega.
+    p.add_argument("--gastos", type=float, default=None)
     args = p.parse_args()
 
     if not os.path.exists(args.input):
@@ -326,17 +508,18 @@ def main() -> int:
         print("Corré primero:  py src/limpieza.py --tc 1500  &&  py src/variables.py  &&  py src/espacial.py")
         return 1
 
+    vigentes = args.vacancia == S.VACANCIA_PCT and args.gastos is None
     rep = M.Reporte()
     rep.titulo("MATERIALIZACION DE KPIs")
     rep(f"Fecha   : {datetime.now():%Y-%m-%d %H:%M}")
     rep(f"Entrada : {args.input}")
-    rep(f"Supuestos: vacancia {args.vacancia:.2f}%, gastos {args.gastos:.2f}%")
-    # Si se pasaron por linea de comandos, la desagregacion de supuestos.py ya
-    # no describe lo que se esta usando y mostrarla confundiria.
-    if (args.vacancia, args.gastos) == (S.VACANCIA_PCT, S.GASTOS_PCT):
+    if vigentes:
+        rep(f"Supuestos: vacancia {args.vacancia:.2f}%, gastos {S.GASTOS_SIN_ABL_PCT:.2f}% + ABL de cada propiedad")
         rep("")
         rep(S.tabla())
     else:
+        gastos_txt = f"{args.gastos:.2f}% planos" if args.gastos is not None else "con ABL segmentado"
+        rep(f"Supuestos: vacancia {args.vacancia:.2f}%, gastos {gastos_txt}")
         rep("    (valores pasados por linea de comandos, no los de supuestos.py)")
 
     df = M.preparar(pd.read_csv(args.input, encoding="utf-8-sig", low_memory=False))
@@ -355,12 +538,26 @@ def main() -> int:
 
     cobertura = alq.groupby("barrio").size()
     vta = M.imputar(vta, pipe, smear, cobertura, rep)
-    vta = M.calcular_rentabilidad(vta, args.vacancia, args.gastos, err_seg, rep)
+    vta["alquiler_post_refaccion_usd_mes"] = alquiler_post_refaccion(vta, pipe, smear)
+
+    vta, proporcion = aplicar_abl(vta, rep)
+    abl_tope = C.abl_por_propiedad(vta, S.VFH_TOPE_SOBRE_MERCADO)["abl_ars_mes"]
+    if args.gastos is None:
+        gastos = (S.GASTOS_SIN_ABL_PCT + vta["abl_pct"]).round(2)
+        alq_post = vta["alquiler_post_refaccion_usd_mes"].fillna(vta["alquiler_est_usd_mes"])
+        vta["gastos_pct_post"] = S.GASTOS_SIN_ABL_PCT + vta["abl_ars_mes"] / (alq_post * S.TC_ARS_USD) * 100
+    else:
+        gastos = args.gastos
+        vta["gastos_pct_post"] = args.gastos
+    vta["gastos_pct"] = gastos
+    vta = M.calcular_rentabilidad(vta, args.vacancia, gastos, err_seg, rep)
+    vta = costos_y_tir(vta, args.vacancia, rep)
     rank = M.ranking_barrios(vta, rep)
 
     out = materializar(df, vta, rep)
     resumen_kpis(out, rep)
-    sens = sensibilidad(out, rank, rep)
+    ad = antes_y_despues(vta, abl_tope, rep)
+    sens = sensibilidad(vta, abl_tope, rank, rep)
 
     os.makedirs(args.outdir, exist_ok=True)
     p1 = os.path.join(args.outdir, "dataset_analitico.csv")
@@ -368,33 +565,36 @@ def main() -> int:
     p3 = os.path.join(args.outdir, "modelo_alquiler.joblib")
     p4 = os.path.join(args.outdir, "reporte_kpis.txt")
     p5 = os.path.join(args.outdir, "sensibilidad_supuestos.csv")
+    p6 = os.path.join(args.outdir, "antes_despues_kpis.csv")
 
     out.to_csv(p1, index=False, encoding="utf-8-sig")
     rank.to_csv(p2, encoding="utf-8-sig")
     sens.to_csv(p5, index=False, encoding="utf-8-sig")
+    ad.to_csv(p6, index=False, encoding="utf-8-sig")
     joblib.dump({
         "pipeline": pipe,
         "smearing": smear,
         "error_por_segmento": err_seg,
         "vacancia": args.vacancia,
+        # None cuando el ABL es segmentado: los gastos son de cada propiedad y
+        # estan en la columna gastos_pct del dataset.
         "gastos": args.gastos,
-        # Solo si el total usado es el de supuestos.py: con --gastos manual
-        # los componentes no suman lo que se aplico.
-        "gastos_componentes": (S.GASTOS_COMPONENTES
-                               if args.gastos == S.GASTOS_PCT else None),
+        "gastos_sin_abl": S.GASTOS_SIN_ABL_PCT if args.gastos is None else None,
+        "abl": "segmentado" if args.gastos is None else "plano",
+        "proporcion_vfh": proporcion,
         "columnas": M.NUMERICAS + M.CATEGORICAS + M.DUMMIES,
     }, p3)
 
     rep("")
     rep("Archivos generados:")
     rep(f"    {p1}    ({len(out):,} filas x {out.shape[1]} columnas)")
-    rep(f"    {p2}")
-    rep(f"    {p3}")
-    rep(f"    {p5}")
-    rep(f"    {p4}")
+    for p_ in (p2, p3, p5, p6, p4):
+        rep(f"    {p_}")
     rep.guardar(p4)
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+
+

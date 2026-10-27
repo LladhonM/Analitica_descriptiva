@@ -2,9 +2,9 @@
 ============================================================================
 MATERIALIZACION DE KPIs
 ============================================================================
-Fecha   : 2026-10-27 17:24
+Fecha   : 2026-10-27 18:06
 Entrada : data/processed/dataset_espacial.csv
-Supuestos: vacancia 5.88%, gastos 14.04%
+Supuestos: vacancia 5.88%, gastos 10.24% + ABL de cada propiedad
 
 Presupuesto del inversor : USD 80,000 a 200,000
 
@@ -12,10 +12,19 @@ Vacancia                 : 5.88%  (1.5 meses vacios cada contrato de 24)
 
 Gastos del propietario (% del alquiler cobrado):
     administracion       :  4.15%  comision de locacion, Ley 5859
-    ABL                  :  3.80%  ARS 32,622/mes sobre USD 573 x 1500
     extraordinarias      :  1.92%  9% de expensas que pesan 21.3%
     mantenimiento        :  4.17%  0.5 mes de alquiler por anio (estimacion propia)
-    TOTAL                : 14.04%
+    subtotal sin ABL     : 10.24%
+    ABL                  : el de cada propiedad, Ley 6927 arts. 41-45 (costos.py);
+                           3.80% en la unidad de referencia, como el ABL plano
+    TOTAL con ABL plano  : 14.04%  (2da entrega; solo en la sensibilidad)
+
+Costos de entrada (% del precio, base = piso del rango):
+    comision comprador   : 3.0 a 4.0%  (CUCICBA)
+    escribano            : 1.0 a 2.0%  + registrales 0.2 a 0.4%
+    sellos (mitad)       : 1.35% hasta ARS 226.1M, 1.75% arriba (Ley 6927 art. 34)
+    refaccion a reciclar : bano USD 5,573 + cocina USD 6,220 + pintura (base); integral ARS 1,350,000/m2 + IVA (alto)
+    riesgo legal         : limitacion declarada, sin numero
 
 Retorno minimo (banda)   : 7.10% a 7.60%  (ON corporativas USD, 2031 a 2037)
     restriccion del analisis, no recomendacion de inversion
@@ -127,10 +136,27 @@ Alquiler estimado — mediana    : USD 757/mes
 Alquiler estimado — rango p5-p95: USD 391 a 2,429
 
 ============================================================================
+ABL SEGMENTADO (Ley Tarifaria 6927, arts. 41 a 45)
+============================================================================
+Proporcion VFH / valor de mercado calibrada : 14.99% (tope legal 20%, Codigo Fiscal art. 288)
+    con ella, la unidad de referencia (1635 ventas de 2 amb y 40-60 m2) paga 3.80% del alquiler, el ABL_PCT plano
+
+ABL como % del alquiler: mediana 3.78%   p10 2.45%   p90 5.48%   (plano: 3.80% para todas)
+ABL en pesos por mes   : mediana 44,123   p10 20,442   p90 112,283
+
+Por que se mueve: el ABL sigue al valor del inmueble y el alquiler no lo sigue
+igual (H1). Por quintil de rentabilidad bruta:
+    Q1 (rinde menos)   ABL mediano  4.58% del alquiler
+    Q2                 ABL mediano  4.18% del alquiler
+    Q3                 ABL mediano  3.84% del alquiler
+    Q4                 ABL mediano  3.46% del alquiler
+    Q5 (rinde mas)     ABL mediano  2.90% del alquiler
+
+============================================================================
 KPIs DE RENTABILIDAD
 ============================================================================
 Vacancia supuesta              : 5.9%
-Gastos del propietario         : 14.0%
+Gastos del propietario         : por propiedad, mediana 14.02% (p10 12.69%, p90 15.72%)
 
 Error ponderado sobre las ventas: 13.5%
     (mayor que el error global de validacion, porque las ventas son
@@ -138,7 +164,7 @@ Error ponderado sobre las ventas: 13.5%
 
 Rentabilidad bruta — mediana   : 7.01%
 Rentabilidad bruta — p25 a p75 : 5.98% a 8.31%
-Rentabilidad neta — mediana    : 5.67%
+Rentabilidad neta — mediana    : 5.65%
 Meses de repago — mediana      : 171 (14.2 años)
 
 Lectura de la incertidumbre:
@@ -149,39 +175,60 @@ Lectura de la incertidumbre:
 Sirve para rankear barrios, no para decidir sobre un inmueble puntual.
 
 ============================================================================
-RANKING DE BARRIOS POR RENTABILIDAD
+COSTOS DE ENTRADA, REFACCION Y TIR A 5 ANIOS
 ============================================================================
-barrio                   n   venta USD   USD/m2  alq est   bruta   neta
------------------------------------------------------------------------
-constitucion           113      65,000    1,129      562  10.10%  8.17%
-san cristobal          227      88,000    1,548      608   8.54%  6.91%
-san telmo              177      95,000    1,721      663   8.36%  6.76%
-balvanera              528      84,950    1,493      579   8.32%  6.74%
-liniers                150     119,500    1,409      759   8.29%  6.71%
-san nicolas            225      85,000    1,616      617   8.29%  6.71%
-barracas               166     110,000    1,533      748   8.23%  6.67%
-monserrat              248      85,250    1,590      580   8.09%  6.55%
-villa luro             140     126,000    1,601      815   8.07%  6.53%
-flores                 488     119,950    1,516      758   8.05%  6.51%
-parque chacabuco       201     130,000    1,583      830   7.87%  6.37%
-floresta               133     107,900    1,401      658   7.86%  6.36%
-villa santa rita       102     127,400    1,681      751   7.72%  6.25%
-villa pueyrredon       110     159,500    1,747      943   7.55%  6.12%
-almagro                537     119,000    1,931      688   7.31%  5.91%
-villa devoto           351     197,000    2,077    1,175   7.31%  5.91%
-villa del parque       274     139,000    1,864      811   7.27%  5.88%
-villa crespo           378     119,250    2,126      692   7.08%  5.73%
-caballito              848     145,000    2,078      811   6.82%  5.52%
-chacarita              106     129,000    2,175      698   6.70%  5.42%
-retiro                 150     105,000    2,076      554   6.58%  5.33%
-saavedra               242     152,100    2,321      823   6.51%  5.28%
-recoleta               571     169,000    2,333      843   6.44%  5.21%
-colegiales             207     169,900    2,500      892   6.37%  5.15%
-nunez                  327     170,000    2,782      841   6.28%  5.08%
-belgrano               565     175,000    2,577      908   6.27%  5.07%
-villa urquiza          438     159,450    2,323      784   6.24%  5.05%
-coghlan                 80     134,870    2,303      669   6.20%  5.02%
-palermo               1102     163,250    2,720      812   6.15%  4.98%
+Costos de entrada (escenario base, piso de cada rango): mediana 5.55% del precio
+    comision 3.0% + escribano 1.0% + registrales 0.2% + mitad de sellos (1.35% hasta ARS 226.1M, 1.75% arriba)
+    escenario alto (techo de cada rango): mediana 7.75%
+
+TIR a 5 anios (neta + costos de entrada + refaccion, reventa al mismo precio):
+    mediana 4.27%   p25 3.45%   p75 5.31%
+    contra la neta mediana 5.65%: los costos de entrada restan 1.38 pp por anio en el horizonte.
+
+Unidades a reciclar en la base: 421
+    descuento del m2 contra comparables de su celda barrio x superficie (H3): 23.3% en 35 celdas;
+    sobre el precio de la unidad a reciclar equivale a 30.3%
+    refaccion base: mediana  13.5% del precio; la cubre el descuento en  94.3% de las unidades
+    refaccion alto: mediana  83.4% del precio; la cubre el descuento en   0.0% de las unidades
+    alquiler estimado tras refaccionar: +14.4% (mediana)
+
+No incluye: meses de obra sin alquiler, costos de salida ni riesgo legal
+(limitacion declarada en supuestos.py, seccion 3g).
+
+============================================================================
+RANKING DE BARRIOS POR RENTABILIDAD NETA
+============================================================================
+barrio                   n   venta USD   USD/m2  alq est   bruta   neta  TIR 5a
+-------------------------------------------------------------------------------
+constitucion           113      65,000    1,129      562  10.10%  8.35%   6.44%
+san cristobal          227      88,000    1,548      608   8.54%  6.98%   5.49%
+san telmo              177      95,000    1,721      663   8.36%  6.85%   5.51%
+liniers                150     119,500    1,409      759   8.29%  6.80%   5.42%
+balvanera              528      84,950    1,493      579   8.32%  6.79%   5.29%
+barracas               166     110,000    1,533      748   8.23%  6.75%   5.27%
+san nicolas            225      85,000    1,616      617   8.29%  6.73%   5.31%
+monserrat              248      85,250    1,590      580   8.09%  6.59%   5.18%
+flores                 488     119,950    1,516      758   8.05%  6.56%   5.10%
+villa luro             140     126,000    1,601      815   8.07%  6.55%   5.16%
+floresta               133     107,900    1,401      658   7.86%  6.41%   5.02%
+parque chacabuco       201     130,000    1,583      830   7.87%  6.41%   5.08%
+villa santa rita       102     127,400    1,681      751   7.72%  6.25%   4.92%
+villa pueyrredon       110     159,500    1,747      943   7.55%  6.09%   4.54%
+almagro                537     119,000    1,931      688   7.31%  5.93%   4.56%
+villa devoto           351     197,000    2,077    1,175   7.31%  5.91%   4.55%
+villa del parque       274     139,000    1,864      811   7.27%  5.91%   4.59%
+villa crespo           378     119,250    2,126      692   7.08%  5.74%   4.42%
+caballito              848     145,000    2,078      811   6.82%  5.50%   4.17%
+chacarita              106     129,000    2,175      698   6.70%  5.41%   4.09%
+saavedra               242     152,100    2,321      823   6.51%  5.26%   3.96%
+retiro                 150     105,000    2,076      554   6.58%  5.26%   3.95%
+recoleta               571     169,000    2,333      843   6.44%  5.14%   3.80%
+colegiales             207     169,900    2,500      892   6.37%  5.11%   3.80%
+villa urquiza          438     159,450    2,323      784   6.24%  5.01%   3.74%
+nunez                  327     170,000    2,782      841   6.28%  5.00%   3.70%
+belgrano               565     175,000    2,577      908   6.27%  4.98%   3.66%
+coghlan                 80     134,870    2,303      669   6.20%  4.93%   3.67%
+palermo               1102     163,250    2,720      812   6.15%  4.88%   3.57%
 
 Correlacion de Spearman entre precio/m2 y rentabilidad: -0.903
 -> Relacion inversa fuerte: los barrios caros rinden menos como renta.
@@ -207,11 +254,18 @@ Columnas de KPI incorporadas:
     n_alq_barrio             mediana      45.00   p5      5.00   p95    254.00
     estimacion_confiable     mediana       1.00   p5      0.00   p95      1.00
     rent_bruta_pct           mediana       7.17   p5      4.76   p95     12.25
-    rent_neta_pct            mediana       5.80   p5      3.85   p95      9.91
+    rent_neta_pct            mediana       5.78   p5      3.81   p95     10.06
     meses_repago             mediana     167.00   p5     98.00   p95    252.00
     error_estimacion         mediana       0.12   p5      0.10   p95      0.17
     rent_bruta_min           mediana       6.24   p5      4.10   p95     10.51
     rent_bruta_max           mediana       8.09   p5      5.40   p95     14.17
+    abl_ars_mes              mediana  44,123.00   p5 16,828.00   p95 152,944.60
+    abl_pct                  mediana       3.78   p5      2.08   p95      6.01
+    gastos_pct               mediana      14.02   p5     12.32   p95     16.25
+    costos_entrada_pct       mediana       5.55   p5      5.55   p95      5.95
+    refaccion_usd            mediana       0.00   p5      0.00   p95      0.00
+    alquiler_post_refaccion_usd_mes mediana     977.45   p5    409.81   p95  2,835.60
+    tir_5a_pct               mediana       4.42   p5      2.46   p95      8.42
 
 ============================================================================
 LOS CUATRO KPIs, LEIDOS
@@ -224,8 +278,8 @@ KPI 1 — Rentabilidad bruta anual
     que tres cuartos de la oferta comparable.
 
 KPI 2 — Rentabilidad neta anual
-    mediana 5.67%   |   p25 4.84%   p75 6.72%
-    La vacancia y los gastos se llevan 19.1% del rendimiento bruto.
+    mediana 5.65%   |   p25 4.80%   p75 6.73%
+    La vacancia y los gastos se llevan 19.4% del rendimiento bruto.
 
 KPI 3 — Meses de repago
     mediana 171 meses (14.2 años)   |   p25 144   p75 201
@@ -248,12 +302,30 @@ KPI 4 — Banda de incertidumbre
     no se distingue del error de estimacion.
 
 ============================================================================
-SENSIBILIDAD A LOS SUPUESTOS DE VACANCIA Y GASTOS
+ANTES Y DESPUES
 ============================================================================
-Base: 9,203 ventas con estimacion confiable; 29 barrios del ranking (30+ ventas)
-Piso del retorno minimo: 7.10% (supuestos.RETORNO_MIN_PISO_PCT)
+Base: 9,203 ventas con estimacion confiable; barrios con 30+ ventas. Piso de la banda: 7.10%
 
-Rentabilidad neta mediana (%):
+antes: neta, ABL plano
+    mediana 5.67%   barrios sobre el piso: 1 ['constitucion']
+    top 5: constitucion, san cristobal, san telmo, balvanera, liniers
+neta, ABL segmentado
+    mediana 5.65%   barrios sobre el piso: 1 ['constitucion']
+    top 5: constitucion, san cristobal, san telmo, liniers, balvanera
+TIR 5a, ABL segm. + entrada
+    mediana 4.27%   barrios sobre el piso: 0 []
+    top 5: constitucion, san telmo, san cristobal, liniers, san nicolas
+
+Spearman del ranking de barrios, ABL plano contra segmentado: 0.9964
+Mayores subidas: villa urquiza +2, barracas +1, liniers +1
+Mayores bajadas: san nicolas -1, retiro -1, villa luro -1
+
+============================================================================
+SENSIBILIDAD A SUPUESTOS Y DEFINICIONES
+============================================================================
+Base: 9,203 ventas con estimacion confiable; 29 barrios del ranking (30+ ventas). Piso: 7.10%. El ranking base es el materializado (neta con ABL segmentado).
+
+A. Gastos planos (2da entrega): neta mediana (%)
 vacancia \ gastos         8%       10%       12%       14%       16%
                4%       6.19      6.06      5.92      5.79      5.65
                6%       6.06      5.93      5.80      5.67      5.54
@@ -261,35 +333,38 @@ vacancia \ gastos         8%       10%       12%       14%       16%
               10%       5.80      5.68      5.55      5.43      5.30
               12%       5.68      5.55      5.43      5.31      5.18
 
-Propiedades con neta >= 7.10% (% de la base):
-vacancia \ gastos         8%       10%       12%       14%       16%
-               4%       29.0      26.3      23.6      21.1      18.7
-               6%       26.5      23.8      21.4      19.0      17.0
-               8%       23.8      21.5      19.1      17.1      15.2
-              10%       21.5      19.3      17.2      15.3      13.6
-              12%       19.1      17.2      15.3      13.7      12.0
+B. ABL x costos de entrada: neta (sin entrada) o TIR 5a (con entrada), mediana (%)
+vacancia            plano / sin         plano / base         plano / alto           segm / sin          segm / base          segm / alto      segm_tope / sin     segm_tope / base     segm_tope / alto
+       4%                  5.78                 4.41                 3.88                 5.76                 4.39                 3.86                 5.66                 4.29                 3.77
+       6%                  5.66                 4.29                 3.77                 5.64                 4.27                 3.75                 5.54                 4.18                 3.66
+       8%                  5.54                 4.18                 3.66                 5.52                 4.16                 3.64                 5.43                 4.06                 3.55
+      10%                  5.42                 4.06                 3.54                 5.40                 4.04                 3.52                 5.31                 3.95                 3.44
+      12%                  5.30                 3.95                 3.43                 5.28                 3.93                 3.41                 5.19                 3.84                 3.33
 
-Barrios con neta mediana >= 7.10% (de 29):
-vacancia \ gastos         8%       10%       12%       14%       16%
-               4%         10         7         2         1         1
-               6%          7         2         1         1         1
-               8%          2         1         1         1         1
-              10%          1         1         1         1         1
-              12%          1         1         1         1         1
+B. ABL x costos de entrada: barrios con mediana >= 7.10% (de 29)
+vacancia            plano / sin         plano / base         plano / alto           segm / sin          segm / base          segm / alto      segm_tope / sin     segm_tope / base     segm_tope / alto
+       4%                     1                    0                    0                    2                    0                    0                    1                    0                    0
+       6%                     1                    0                    0                    1                    0                    0                    1                    0                    0
+       8%                     1                    0                    0                    1                    0                    0                    1                    0                    0
+      10%                     1                    0                    0                    1                    0                    0                    1                    0                    0
+      12%                     1                    0                    0                    1                    0                    0                    1                    0                    0
 
-Escenario de supuestos.py (vacancia 5.88%, gastos 14.04%): neta mediana 5.67%, 19.1% de las propiedades y 1 barrios sobre el piso.
+B. ABL x costos de entrada: Spearman del ranking contra el base
+vacancia            plano / sin         plano / base         plano / alto           segm / sin          segm / base          segm / alto      segm_tope / sin     segm_tope / base     segm_tope / alto
+       4%                  1.00                 0.99                 0.99                 1.00                 0.99                 0.99                 1.00                 0.99                 0.99
+       6%                  1.00                 0.99                 0.99                 1.00                 0.99                 0.99                 1.00                 0.99                 0.99
+       8%                  1.00                 0.99                 0.99                 1.00                 0.99                 0.99                 1.00                 0.99                 0.99
+      10%                  1.00                 0.99                 0.99                 1.00                 0.99                 0.99                 1.00                 0.99                 0.99
+      12%                  1.00                 0.99                 0.99                 1.00                 0.99                 0.99                 1.00                 0.99                 0.99
 
-Del escenario mas favorable al mas adverso de la grilla, la neta mediana va de 6.19% a 5.18% (1.01 pp).
-Spearman minimo del ranking contra el base: 1.0000; top 5 identico en 25 de 25 escenarios.
-Lectura: los supuestos mueven el NIVEL de la rentabilidad y, con el,
-cuantas unidades superan el retorno minimo; no mueven QUE barrio rinde
-mas. El ranking es robusto a estos supuestos porque se aplican iguales
-a todos. Dejaria de serlo con una vacancia distinta por barrio, que
-este trabajo no mide.
+Top 5 igual al base en 10 de 45 escenarios.
+Lectura: la mediana va de 3.33% a 5.78% en la grilla B, y los barrios sobre el piso, de 0 a 2.
+    La definicion del ABL lleva el Spearman del ranking hasta 0.9963; los costos de entrada, hasta 0.9905.
 
 Archivos generados:
-    data/processed\dataset_analitico.csv    (12,097 filas x 106 columnas)
+    data/processed\dataset_analitico.csv    (12,097 filas x 113 columnas)
     data/processed\ranking_barrios.csv
     data/processed\modelo_alquiler.joblib
     data/processed\sensibilidad_supuestos.csv
+    data/processed\antes_despues_kpis.csv
     data/processed\reporte_kpis.txt

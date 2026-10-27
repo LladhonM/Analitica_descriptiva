@@ -25,6 +25,7 @@ import sys
 import joblib
 import pandas as pd
 
+import fuentes_externas as F
 import supuestos as S
 
 
@@ -102,6 +103,31 @@ check("la grilla de sensibilidad contiene los valores de la 1ra entrega",
       and S.GASTOS_PCT_ENTREGA_1 in S.SENSIBILIDAD_GASTOS)
 
 
+# --- ABL segmentado y costos de entrada ---------------------------------------
+check("GASTOS_SIN_ABL_PCT = administracion + extraordinarias + mantenimiento",
+      abs(S.GASTOS_SIN_ABL_PCT - round(S.ADMINISTRACION_PCT + S.EXTRAORDINARIAS_PCT
+                                       + S.MANTENIMIENTO_PCT, 2)) < 0.005 + TOL,
+      f"{S.GASTOS_SIN_ABL_PCT}")
+check("coeficiente geografico para los 48 barrios oficiales",
+      sorted(S.ABL_COEF_GEOGRAFICO) == sorted(F.BARRIOS_CABA),
+      f"faltan {sorted(set(F.BARRIOS_CABA) - set(S.ABL_COEF_GEOGRAFICO))}, "
+      f"sobran {sorted(set(S.ABL_COEF_GEOGRAFICO) - set(F.BARRIOS_CABA))}")
+check("coeficientes geograficos entre 0 y 2 (Ley 6927, art. 42)",
+      all(0 <= c <= 2 for v in S.ABL_COEF_GEOGRAFICO.values() for c in v))
+tramos = S.INMOBILIARIO_TRAMOS
+check("tramos del Inmobiliario: cada cuota fija es la del tramo anterior completo",
+      all(abs(tramos[i + 1][1] - (tramos[i][1] + (tramos[i + 1][0] - tramos[i][0]) * tramos[i][2])) < 1
+          for i in range(len(tramos) - 1)))
+check("tramos del Inmobiliario: alicuota creciente (escala progresiva)",
+      all(tramos[i][2] < tramos[i + 1][2] for i in range(len(tramos) - 1)))
+for nombre, rango in [("comision", S.COMISION_COMPRADOR_PCT), ("escribano", S.ESCRIBANO_PCT),
+                      ("registrales", S.REGISTRALES_PCT)]:
+    check(f"costos de entrada: {nombre} con base <= alto, en %", 0 < rango[0] <= rango[1] < 10, f"{rango}")
+check("sellos: alicuota reducida menor que la general",
+      0 < S.SELLOS_ALICUOTA_REDUCIDA_PCT < S.SELLOS_ALICUOTA_PCT < 10)
+check("proporcion VFH / mercado: tope legal del 20%", S.VFH_TOPE_SOBRE_MERCADO == 0.20)
+
+
 # --- Alquiler temporal ------------------------------------------------------
 check("temporal: comision de plataforma entre 0% y 30%", 0 < S.COMISION_PLATAFORMA_PCT < 30)
 check("temporal: gestion entre 0% y 40%", 0 <= S.GESTION_TEMPORAL_PCT < 40)
@@ -128,15 +154,18 @@ if os.path.exists(MODELO):
     m = joblib.load(MODELO)
     # Si falla, el dataset se genero con otros supuestos (o con --gastos a
     # mano): reejecutar py src/kpis.py.
-    check("el modelo recibio el GASTOS_PCT de supuestos.py",
-          abs(m["gastos"] - S.GASTOS_PCT) < TOL,
-          f"joblib {m['gastos']} contra supuestos {S.GASTOS_PCT}: reejecutar py src/kpis.py")
+    check("el modelo se genero con el ABL segmentado (sin --gastos a mano)",
+          m.get("abl") == "segmentado" and m.get("gastos") is None,
+          f"abl {m.get('abl')}, gastos {m.get('gastos')}: reejecutar py src/kpis.py")
+    check("el modelo recibio el GASTOS_SIN_ABL_PCT de supuestos.py",
+          m.get("gastos_sin_abl") is not None and abs(m["gastos_sin_abl"] - S.GASTOS_SIN_ABL_PCT) < TOL,
+          f"joblib {m.get('gastos_sin_abl')} contra supuestos {S.GASTOS_SIN_ABL_PCT}")
     check("el modelo recibio la VACANCIA_PCT de supuestos.py",
           abs(m["vacancia"] - S.VACANCIA_PCT) < TOL,
           f"joblib {m['vacancia']} contra supuestos {S.VACANCIA_PCT}: reejecutar py src/kpis.py")
-    comp = m.get("gastos_componentes")
-    check("el joblib guardo los componentes y suman lo aplicado",
-          comp is not None and suma_coincide(comp, m["gastos"]), f"{comp}")
+    prop = m.get("proporcion_vfh")
+    check("la proporcion VFH / mercado calibrada no supera el tope legal",
+          prop is not None and 0 < prop <= S.VFH_TOPE_SOBRE_MERCADO, f"{prop}")
 else:
     salteados += 4
 
@@ -144,13 +173,19 @@ df = None
 if os.path.exists(DATASET):
     df = pd.read_csv(DATASET, encoding="utf-8-sig", low_memory=False)
     v = df[df["rent_bruta_pct"].notna()]
-    factor = (1 - S.VACANCIA_PCT / 100) * (1 - S.GASTOS_PCT / 100)
+    factor = (1 - S.VACANCIA_PCT / 100) * (1 - v["gastos_pct"] / 100)
     desvio = float((v["rent_neta_pct"] - (v["rent_bruta_pct"] * factor).round(2)).abs().max())
     # 0,01 de tolerancia: la bruta ya viene redondeada a 2 decimales.
-    check("rent_neta_pct = bruta x (1 - vacancia) x (1 - gastos) en todo el dataset",
+    check("rent_neta_pct = bruta x (1 - vacancia) x (1 - gastos de cada propiedad)",
           desvio <= 0.011, f"desvio maximo {desvio:.3f} pp")
+    desvio = float((v["gastos_pct"] - (S.GASTOS_SIN_ABL_PCT + v["abl_pct"])).abs().max())
+    check("gastos_pct = GASTOS_SIN_ABL_PCT + abl_pct en todo el dataset",
+          desvio <= 0.011, f"desvio maximo {desvio:.3f} pp")
+    check("NEG: con el GASTOS_PCT plano la neta NO coincide (el dataset es segmentado)",
+          float((v["rent_neta_pct"] - (v["rent_bruta_pct"] * (1 - S.VACANCIA_PCT / 100)
+                                       * (1 - S.GASTOS_PCT / 100)).round(2)).abs().max()) > 0.011)
 else:
-    salteados += 1
+    salteados += 3
 
 # La ocupacion de equilibrio que reporta temporal.py tiene que ser, por
 # definicion, la que iguala las dos netas. Si alguien cambia la formula de
@@ -163,7 +198,7 @@ if os.path.exists(TEMPORAL):
     dif = float((neta_eq - tv["trad_neta_usd"]).abs().max())
     check("temporal: con la ocupacion de equilibrio las dos netas empatan",
           dif < 1.0, f"diferencia maxima USD {dif:.2f}: reejecutar py src/temporal.py")
-    f_trad = (1 - S.VACANCIA_PCT / 100) * (1 - S.GASTOS_PCT / 100)
+    f_trad = (1 - S.VACANCIA_PCT / 100) * (1 - tv["gastos_mediana_pct"] / 100)
     dif = float((tv["trad_neta_usd"] - tv["alquiler_est_mediano_usd"] * 12 * f_trad).abs().max())
     check("temporal: la neta tradicional usa los supuestos vigentes del KPI 2",
           dif < 1.0, f"diferencia maxima USD {dif:.2f}: reejecutar py src/temporal.py")

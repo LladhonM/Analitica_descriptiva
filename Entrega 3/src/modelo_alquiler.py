@@ -303,7 +303,7 @@ def imputar(vta: pd.DataFrame, pipe: Pipeline, smear: float,
     return vta
 
 
-def calcular_rentabilidad(vta: pd.DataFrame, vacancia: float, gastos: float,
+def calcular_rentabilidad(vta: pd.DataFrame, vacancia: float, gastos: float | pd.Series,
                           err_seg: pd.Series, rep: Reporte) -> pd.DataFrame:
     """
     Calcula los KPIs de rentabilidad.
@@ -315,11 +315,16 @@ def calcular_rentabilidad(vta: pd.DataFrame, vacancia: float, gastos: float,
     Nota sobre expensas: en CABA las ordinarias las paga el inquilino, por eso
     NO se descuentan del ingreso del propietario. Lo que si pesa es la vacancia
     (meses sin inquilino), la administracion, el ABL y las extraordinarias:
-    todo eso esta agrupado en el parametro `gastos`.
+    todo eso esta agrupado en el parametro `gastos`, que es un numero para
+    todas las propiedades o una serie con el de cada una (ABL segmentado).
     """
     rep.titulo("KPIs DE RENTABILIDAD")
     rep(f"Vacancia supuesta              : {vacancia:.1f}%")
-    rep(f"Gastos del propietario         : {gastos:.1f}%")
+    if isinstance(gastos, pd.Series):
+        rep(f"Gastos del propietario         : por propiedad, mediana {gastos.median():.2f}% "
+            f"(p10 {gastos.quantile(.1):.2f}%, p90 {gastos.quantile(.9):.2f}%)")
+    else:
+        rep(f"Gastos del propietario         : {gastos:.1f}%")
     rep("")
 
     v = vta.copy()
@@ -359,11 +364,18 @@ def calcular_rentabilidad(vta: pd.DataFrame, vacancia: float, gastos: float,
 
 
 def ranking_barrios(v: pd.DataFrame, rep: Reporte) -> pd.DataFrame:
-    """Ranking de barrios por rentabilidad bruta mediana."""
-    rep.titulo("RANKING DE BARRIOS POR RENTABILIDAD")
+    """
+    Ranking de barrios por rentabilidad NETA mediana.
+
+    Con gastos planos, ordenar por bruta o por neta daba lo mismo. Con el ABL
+    segmentado ya no: los gastos cambian de una propiedad a otra, y lo que
+    cobra el inversor es la neta. Los empates se ordenan por nombre, para que
+    el ranking no cambie entre corridas.
+    """
+    rep.titulo("RANKING DE BARRIOS POR RENTABILIDAD NETA")
 
     ok = v[v["estimacion_confiable"] == 1]
-    g = ok.groupby("barrio").agg(
+    agg = dict(
         n_ventas=("venta_usd", "size"),
         venta_med=("venta_usd", "median"),
         venta_m2=("venta_m2_usd", "median"),
@@ -371,15 +383,21 @@ def ranking_barrios(v: pd.DataFrame, rep: Reporte) -> pd.DataFrame:
         rent_bruta=("rent_bruta_pct", "median"),
         rent_neta=("rent_neta_pct", "median"),
     )
-    g = g[g["n_ventas"] >= 30].sort_values("rent_bruta", ascending=False)
+    if "tir_5a_pct" in ok.columns:
+        agg["tir_5a"] = ("tir_5a_pct", "median")
+    g = ok.groupby("barrio").agg(**agg)
+    g = (g[g["n_ventas"] >= 30].reset_index()
+         .sort_values(["rent_neta", "barrio"], ascending=[False, True]).set_index("barrio"))
 
+    con_tir = "tir_5a" in g.columns
     rep(f"{'barrio':<20}{'n':>6}{'venta USD':>12}{'USD/m2':>9}"
-        f"{'alq est':>9}{'bruta':>8}{'neta':>7}")
-    rep("-" * 71)
+        f"{'alq est':>9}{'bruta':>8}{'neta':>7}" + (f"{'TIR 5a':>8}" if con_tir else ""))
+    rep("-" * (79 if con_tir else 71))
     for b, r in g.iterrows():
         rep(f"{b:<20}{int(r['n_ventas']):>6}{r['venta_med']:>12,.0f}"
             f"{r['venta_m2']:>9,.0f}{r['alq_est']:>9,.0f}"
-            f"{r['rent_bruta']:>7.2f}%{r['rent_neta']:>6.2f}%")
+            f"{r['rent_bruta']:>7.2f}%{r['rent_neta']:>6.2f}%"
+            + (f"{r['tir_5a']:>7.2f}%" if con_tir else ""))
 
     # Correlacion: valida (o refuta) la hipotesis de relacion inversa
     c = g["venta_m2"].corr(g["rent_bruta"], method="spearman")

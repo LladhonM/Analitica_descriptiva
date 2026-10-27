@@ -114,10 +114,11 @@ ADMINISTRACION_PCT = 4.15        # Ley 5859 CABA, tope legal
 # AGIP el contribuyente es siempre el propietario (Roomix, 05-05-2026). Muchos
 # contratos se lo trasladan al inquilino, pero no es la regla: se asume que lo
 # paga el propietario, que es el caso conservador.
-# Monto: Ley Tarifaria 6927 (2026), ejemplos de Roomix 05-05-2026 para
-# valuaciones fiscales de ARS 15M y 25M, el rango de un 2 ambientes usado.
-ABL_ARS_MES_MIN = 21_250         # VFH ARS 15M, coef. 0,75 (Roomix 05-05-2026)
-ABL_ARS_MES_MAX = 43_994         # VFH ARS 25M, coef. 1,25 (idem)
+# Nivel de referencia: punto medio de dos ejemplos calculados por Roomix
+# (05-05-2026) con la Ley Tarifaria 6927. Son ejemplos de la fuente, no una
+# boleta medida: no hay un dato publicado del ABL tipico de un 2 ambientes.
+ABL_ARS_MES_MIN = 21_250         # VFH ARS 15M, coef. geografico 0,75 (Roomix 05-05-2026)
+ABL_ARS_MES_MAX = 43_994         # VFH ARS 25M, coef. geografico 1,75 (idem)
 ABL_ARS_MES = (ABL_ARS_MES_MIN + ABL_ARS_MES_MAX) / 2
 
 # Alquiler de referencia para pasar el ABL a porcentaje: mediana de los
@@ -126,7 +127,86 @@ ABL_ARS_MES = (ABL_ARS_MES_MIN + ABL_ARS_MES_MAX) / 2
 # test_supuestos.py verifica que siga coincidiendo con el dataset.
 ALQUILER_REF_USD_MES = 573       # dataset_analitico.csv, 2 amb 40-60 m2
 
+# ABL plano: el mismo porcentaje para todas las propiedades. Era el supuesto
+# de la 2da entrega. Desde la 3ra se usa solo como NIVEL de referencia del ABL
+# segmentado (abajo) y como escenario de comparacion en la sensibilidad.
 ABL_PCT = round(ABL_ARS_MES / (ALQUILER_REF_USD_MES * TC_ARS_USD) * 100, 2)
+
+# --- 3b2. ABL segmentado (costos.py) -----------------------------------------
+# El ABL no es un porcentaje del alquiler: es un tributo sobre la Valuacion
+# Fiscal Homogenea (VFH) de cada partida, con escala progresiva y un
+# coeficiente por barrio. Un porcentaje plano les cobra de mas a las unidades
+# que rinden mucho y de menos a las que rinden poco.
+#
+# Formula: Ley Tarifaria 2026, Ley 6927, Anexo (IF-2025-54254723-GCABA-MHFGC),
+# Boletin Oficial CABA, consultado el 27-10-2026:
+#   art. 41  Impuesto Inmobiliario = CF + (VFH - lm) x al x USC, por tramos
+#   art. 42  Tasa ABL = VFH x 0,80% x [1 + CG x 0,5] x USC
+#   art. 43  USC = 1
+#   art. 44  +1% de la tasa si la VFH supera $32.000.000; minimo anual $14.100
+#   art. 45  el total anual no puede superar el 1% del valor de mercado
+ABL_ALICUOTA_BASE = 0.0080       # Ley 6927, anexo, art. 42
+ABL_PONDERACION_CG = 0.5         # idem
+ABL_USC = 1                      # Ley 6927, anexo, art. 43
+ABL_UMBRAL_RECARGO_VFH = 32_000_000  # Ley 6927, anexo, art. 44
+ABL_RECARGO = 0.01               # idem: 1% de la tasa
+ABL_MINIMO_ANUAL_ARS = 14_100    # idem
+ABL_TOPE_SOBRE_MERCADO = 0.01    # Ley 6927, anexo, art. 45
+
+# Impuesto Inmobiliario, art. 41: (VFH desde, cuota fija, alicuota sobre el
+# excedente). Cada cuota fija es la del tramo anterior completo.
+INMOBILIARIO_TRAMOS = [
+    (0,             0,          0.0060),
+    (19_150_000,    114_900,    0.0065),
+    (28_100_000,    173_075,    0.0070),
+    (40_000_000,    256_375,    0.0075),
+    (58_000_000,    391_375,    0.0080),
+    (87_000_000,    623_375,    0.0085),
+    (140_000_000,   1_073_875,  0.0090),
+    (270_000_000,   2_243_875,  0.0100),
+    (900_000_000,   8_543_875,  0.0110),
+    (5_500_000_000, 59_143_875, 0.0120),
+]
+
+# Coeficiente geografico (CG), art. 42: un valor por barrio, o uno por subzona
+# cuando la ley parte el barrio por avenidas. El dataset no ubica el aviso en
+# la subzona, asi que a esos barrios se les asigna el PROMEDIO de sus
+# subzonas (estimacion propia; la ley no pondera por superficie).
+ABL_COEF_GEOGRAFICO = {
+    # Zona I
+    "barracas": [0.25, 0.00], "la boca": [0.25, 0.00], "boedo": [0.50, 0.25],
+    "constitucion": [0.50], "flores": [0.50, 0.25, 0.75, 1.00, 0.75],
+    "liniers": [0.50], "mataderos": [0.50, 0.25], "nueva pompeya": [0.25, 0.00],
+    "parque avellaneda": [0.50], "parque chacabuco": [0.50, 0.25],
+    "parque patricios": [0.25], "san cristobal": [0.50], "san telmo": [0.50],
+    "villa lugano": [0.25], "villa riachuelo": [0.25, 0.00], "villa soldati": [0.25, 0.00],
+    # Zona II (Belgrano, Nunez, Palermo y Recoleta siguen en la zona III)
+    "agronomia": [0.75], "almagro": [0.75], "balvanera": [0.75],
+    "belgrano": [1.25, 1.75, 1.75, 1.50], "caballito": [0.75, 1.00, 0.75],
+    "chacarita": [1.00, 0.75], "coghlan": [1.00], "colegiales": [1.25],
+    "floresta": [0.75, 1.00, 0.75], "monserrat": [1.00], "monte castro": [0.75],
+    "nunez": [1.25, 1.75, 1.75, 1.50],
+    "palermo": [1.25, 2.00, 1.75, 1.75, 1.50, 1.50, 1.50],
+    "parque chas": [0.75], "la paternal": [0.75], "recoleta": [1.25, 1.75],
+    "saavedra": [1.25, 1.00], "san nicolas": [1.00], "velez sarsfield": [0.75],
+    "versalles": [0.75], "villa crespo": [1.00, 0.75], "villa del parque": [0.75],
+    "villa devoto": [0.75, 1.00, 0.75], "villa gral. mitre": [0.75],
+    "villa luro": [0.75], "villa ortuzar": [0.75], "villa pueyrredon": [0.75],
+    "villa real": [0.75], "villa santa rita": [0.75], "villa urquiza": [1.00],
+    # Zona III
+    "puerto madero": [2.00], "retiro": [1.75],
+}
+
+# La VFH de cada aviso no se publica: se aproxima. Codigo Fiscal CABA,
+# art. 288: la VFH parte del valor de mercado por m2 de la zona y de la
+# edificacion, y "no podra exceder el 20% del valor de mercado". Por eso:
+#   VFH = proporcion x m2 de mercado mediano del barrio y tipo x superficie
+# No hay una fuente que publique la proporcion tipica. ESTIMACION PROPIA:
+# costos.py la calibra para que la unidad de referencia (2 ambientes, 40-60
+# m2) pague el mismo ABL_PCT de arriba. Asi el ajuste REDISTRIBUYE el ABL
+# entre propiedades sin cambiar su nivel; el nivel se prueba aparte con la
+# proporcion en el tope legal.
+VFH_TOPE_SOBRE_MERCADO = 0.20    # Codigo Fiscal CABA, art. 288
 
 # --- 3c. Expensas extraordinarias -------------------------------------------
 # Las paga el propietario (CCyC art. 1209). Se estiman como la fraccion de las
@@ -158,17 +238,79 @@ GASTOS_COMPONENTES = {
     "extraordinarias": EXTRAORDINARIAS_PCT,
     "mantenimiento": MANTENIMIENTO_PCT,
 }
-# El modelo recibe un solo numero. test_supuestos.py verifica que sea la suma.
+# Con ABL plano, el modelo recibe un solo numero. test_supuestos.py verifica
+# que sea la suma.
 GASTOS_PCT = round(sum(GASTOS_COMPONENTES.values()), 2)
+# Con ABL segmentado, los gastos de cada propiedad son estos tres componentes,
+# iguales para todas, mas su propio ABL.
+GASTOS_SIN_ABL_PCT = round(GASTOS_PCT - ABL_PCT, 2)
+
+# --- 3e. Costos de entrada del comprador --------------------------------------
+# Se pagan una vez, al comprar, y no se recuperan al vender. Van como % del
+# precio. Cada uno es un rango publicado: (base, alto). La BASE es el piso del
+# rango, asi que el efecto que se informa sobre la rentabilidad es un minimo.
+#
+# Comision inmobiliaria del comprador: CUCICBA, "Honorarios inmobiliarios: que
+# cobra el corredor y que dice la ley", 09-01-2026 (Ley 2340, mod. Ley 5859):
+# el comprador paga entre 3% y 4%. La fuente no aclara si se suma IVA: no se
+# suma.
+COMISION_COMPRADOR_PCT = (3.0, 4.0)   # CUCICBA 09-01-2026
+# Escribano: "entre el 1% y el 2% del valor escriturado"; certificados,
+# informes e inscripcion, "entre un 0,2% y un 0,4% adicional". La Nacion,
+# "Escritura de una propiedad: que gastos hay que pagar...", 01-05-2026. La
+# fuente no menciona IVA: no se suma.
+ESCRIBANO_PCT = (1.0, 2.0)            # La Nacion 01-05-2026
+REGISTRALES_PCT = (0.2, 0.4)          # La Nacion 01-05-2026
+# Impuesto de Sellos sobre la compraventa: 3,50%, o 2,70% si el precio es de
+# hasta $226.100.000 (Ley 6927, anexo, art. 34). Se divide en partes iguales
+# entre comprador y vendedor (La Nacion 01-05-2026). La exencion de vivienda
+# unica no aplica: el inversor compra para alquilar.
+SELLOS_ALICUOTA_PCT = 3.50            # Ley 6927, anexo, art. 34
+SELLOS_ALICUOTA_REDUCIDA_PCT = 2.70   # idem, precio hasta el umbral
+SELLOS_UMBRAL_ARS = 226_100_000       # idem
+SELLOS_PARTE_COMPRADOR = 0.5          # La Nacion 01-05-2026, partes iguales
+
+# --- 3f. Refaccion de las unidades "a reciclar" -------------------------------
+# Sin este costo, el descuento con que cotizan (H3) no se puede leer como
+# oportunidad. Dos escenarios, porque las fuentes difieren por un factor de 4:
+#
+# BASE, refaccion minima: rehacer bano y cocina y pintar. Reporte Inmobiliario,
+# informe de enero de 2026, citado por La Nacion, "Uno por uno: estos son los
+# costos para hacer una remodelacion", 30-03-2026: refaccion integral de un
+# bano de 3,75 m2, USD 5.573; remodelacion completa de una cocina de 5,6 m2,
+# USD 6.220, con mano de obra y materiales. Pintura: G. Ortega (red Sui
+# Color), misma nota: una vivienda de 100 m2, $800.000 a $900.000 de
+# materiales y $2.000.000 a $3.000.000 de mano de obra (puntos medios).
+REFACCION_BANO_USD = 5_573            # Reporte Inmobiliario ene-2026, via La Nacion 30-03-2026
+REFACCION_COCINA_USD = 6_220          # idem
+PINTURA_ARS_POR_M2 = (850_000 + 2_500_000) / 100  # Sui Color, via La Nacion 30-03-2026
+# ALTO, refaccion integral (instalaciones, aberturas, cocina, banos, pisos y
+# pintura): RenovArqui, "Cuanto cuesta remodelar un departamento en Buenos
+# Aires en 2026", precios a febrero de 2026, arquitecto independiente, piso
+# del rango: $1.350.000/m2 + IVA. Es material comercial de una empresa del
+# rubro. IVA general: 21%.
+REFACCION_INTEGRAL_ARS_M2 = 1_350_000  # RenovArqui feb-2026, + IVA
+IVA_GENERAL = 0.21
+# No se descuentan los meses de obra sin alquiler: el efecto real es mayor.
+
+# --- 3g. Riesgo legal ---------------------------------------------------------
+# LIMITACION DECLARADA, NO UN NUMERO. Juicios de desalojo, inquilinos que no
+# pagan, cambios de regimen como el de la Ley 27.551 y el DNU 70/2023: no hay
+# una fuente que publique su frecuencia o su costo para CABA, y estimarlo
+# seria peor que no tenerlo. No entra en ningun KPI.
 
 # Valores de la 1ra entrega, conservados para poder reproducir sus KPIs y
 # reportar el antes y el despues.
 VACANCIA_PCT_ENTREGA_1 = 8.0     # 1ra entrega, sin fuente
 GASTOS_PCT_ENTREGA_1 = 12.0      # idem
 
-# Grilla del analisis de sensibilidad de kpis.py.
+# Grilla del analisis de sensibilidad de kpis.py. La de gastos es la de la
+# 2da entrega (gastos planos); la segunda grilla cruza la vacancia con la
+# definicion del ABL y con los costos de entrada.
 SENSIBILIDAD_VACANCIA = [4.0, 6.0, 8.0, 10.0, 12.0]
 SENSIBILIDAD_GASTOS = [8.0, 10.0, 12.0, 14.0, 16.0]
+SENSIBILIDAD_ABL = ["plano", "segmentado", "segmentado_tope"]
+SENSIBILIDAD_ENTRADA = ["sin", "base", "alto"]
 
 
 # ==========================================================================
@@ -223,6 +365,12 @@ HORIZONTE_ANIOS = 5              # vencimiento YMCXO (2031) desde 2026
 MINUTOS_CAMINATA = 10            # estimacion propia
 VELOCIDAD_CAMINATA_M_MIN = 80    # 4,8 km/h, estimacion propia
 RADIO_CAMINATA_M = MINUTOS_CAMINATA * VELOCIDAD_CAMINATA_M_MIN
+
+# H2 (accesibilidad.py): tramos de distancia para el perfil del precio. Bordes
+# en metros; el primero es la referencia. Son cortes de lectura: la forma de
+# la relacion se prueba ademas con umbrales moviles.
+TRAMOS_DISTANCIA_M = [0, 300, 600, 1_000, 1_500]
+UMBRALES_H2_M = [400, 600, 800, 1_000, 1_200, 1_500]
 
 
 # ==========================================================================
@@ -334,13 +482,25 @@ def tabla() -> str:
         "",
         "Gastos del propietario (% del alquiler cobrado):",
         f"    administracion       : {ADMINISTRACION_PCT:>5.2f}%  comision de locacion, Ley 5859",
-        f"    ABL                  : {ABL_PCT:>5.2f}%  ARS {ABL_ARS_MES:,.0f}/mes sobre "
-        f"USD {ALQUILER_REF_USD_MES} x {TC_ARS_USD}",
         f"    extraordinarias      : {EXTRAORDINARIAS_PCT:>5.2f}%  "
         f"{EXTRAORD_SOBRE_EXPENSAS:.0%} de expensas que pesan {EXPENSAS_SOBRE_ALQUILER:.1%}",
         f"    mantenimiento        : {MANTENIMIENTO_PCT:>5.2f}%  "
         f"{MANTENIMIENTO_MESES_POR_ANIO} mes de alquiler por anio (estimacion propia)",
-        f"    TOTAL                : {GASTOS_PCT:>5.2f}%",
+        f"    subtotal sin ABL     : {GASTOS_SIN_ABL_PCT:>5.2f}%",
+        f"    ABL                  : el de cada propiedad, Ley 6927 arts. 41-45 (costos.py);",
+        f"                           {ABL_PCT:.2f}% en la unidad de referencia, como el ABL plano",
+        f"    TOTAL con ABL plano  : {GASTOS_PCT:>5.2f}%  (2da entrega; solo en la sensibilidad)",
+        "",
+        "Costos de entrada (% del precio, base = piso del rango):",
+        f"    comision comprador   : {COMISION_COMPRADOR_PCT[0]} a {COMISION_COMPRADOR_PCT[1]}%  (CUCICBA)",
+        f"    escribano            : {ESCRIBANO_PCT[0]} a {ESCRIBANO_PCT[1]}%  + registrales "
+        f"{REGISTRALES_PCT[0]} a {REGISTRALES_PCT[1]}%",
+        f"    sellos (mitad)       : {SELLOS_ALICUOTA_REDUCIDA_PCT * SELLOS_PARTE_COMPRADOR:.2f}% hasta "
+        f"ARS {SELLOS_UMBRAL_ARS / 1e6:,.1f}M, {SELLOS_ALICUOTA_PCT * SELLOS_PARTE_COMPRADOR:.2f}% arriba "
+        f"(Ley 6927 art. 34)",
+        f"    refaccion a reciclar : bano USD {REFACCION_BANO_USD:,} + cocina USD {REFACCION_COCINA_USD:,} "
+        f"+ pintura (base); integral ARS {REFACCION_INTEGRAL_ARS_M2:,}/m2 + IVA (alto)",
+        "    riesgo legal         : limitacion declarada, sin numero",
         "",
         f"Retorno minimo (banda)   : {RETORNO_MIN_PISO_PCT:.2f}% a {RETORNO_MIN_TECHO_PCT:.2f}%  "
         f"(ON corporativas USD, 2031 a 2037)",

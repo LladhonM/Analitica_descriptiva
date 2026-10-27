@@ -87,6 +87,10 @@ def lado_remax(ruta: str = ANALITICO) -> pd.DataFrame:
         venta_mediana_usd=("venta_usd", "median"),
         alquiler_est_mediano_usd=("alquiler_est_usd_mes", "median"),
         expensas_mediana_usd=("expensas_usd", "median"),
+        # El ABL de cada propiedad (kpis.py): lo paga el duenio en los dos
+        # modos, asi que entra en la neta tradicional y en los fijos del temporal.
+        gastos_mediana_pct=("gastos_pct", "median"),
+        abl_mediano_usd_mes=("abl_ars_mes", lambda s: s.median() / S.TC_ARS_USD),
     ).reset_index()
 
 
@@ -100,7 +104,9 @@ def comparar(rep: Reporte) -> pd.DataFrame:
     rep(f"    con {S.MIN_CELDA_TEMPORAL}+ ventas y {S.MIN_CELDA_TEMPORAL}+ avisos activos: {len(t)}")
 
     # --- Tradicional: los mismos supuestos que el KPI 2 ---------------------
-    f_trad = (1 - S.VACANCIA_PCT / 100) * (1 - S.GASTOS_PCT / 100)
+    # Los gastos son los medianos de la celda: con el ABL segmentado, cada
+    # propiedad tiene los suyos.
+    f_trad = (1 - S.VACANCIA_PCT / 100) * (1 - t["gastos_mediana_pct"] / 100)
     t["trad_neta_usd"] = t["alquiler_est_mediano_usd"] * 12 * f_trad
     t["trad_neta_pct"] = t["trad_neta_usd"] / t["venta_mediana_usd"] * 100
 
@@ -110,10 +116,10 @@ def comparar(rep: Reporte) -> pd.DataFrame:
               - S.MANTENIMIENTO_TEMPORAL_PCT / 100)
     margen_auto = (1 - S.COMISION_PLATAFORMA_PCT / 100) - S.MANTENIMIENTO_TEMPORAL_PCT / 100
     # Fijos anuales: se pagan haya o no huespedes. El ABL tambien lo paga el
-    # duenio en el tradicional, pero ahi ya esta dentro de GASTOS_PCT.
+    # duenio en el tradicional, pero ahi ya esta dentro de los gastos.
     t["fijos_usd"] = ((t["expensas_mediana_usd"]
                        + S.SERVICIOS_ARS_MES / S.TC_ARS_USD
-                       + S.ABL_ARS_MES / S.TC_ARS_USD) * 12
+                       + t["abl_mediano_usd_mes"]) * 12
                       + t["dormitorios_grupo"].map(S.AMOBLAMIENTO_USD) / S.HORIZONTE_ANIOS)
     bruto_pleno = t["adr_mediana_usd"] * 365   # ingreso con 100% de ocupacion
 
@@ -138,8 +144,8 @@ def comparar(rep: Reporte) -> pd.DataFrame:
         f"({S.GESTION_TEMPORAL_PCT:.0f}%), {margen_auto:.3f} autogestionado")
     rep(f"    = (1 - plataforma {S.COMISION_PLATAFORMA_PCT}%) x (1 - gestion) "
         f"- mantenimiento {S.MANTENIMIENTO_TEMPORAL_PCT}%")
-    rep(f"Fijos anuales: expensas (mediana de la celda) + servicios "
-        f"USD {S.SERVICIOS_ARS_MES / S.TC_ARS_USD:,.0f}/mes + ABL USD {S.ABL_ARS_MES / S.TC_ARS_USD:,.0f}/mes")
+    rep(f"Fijos anuales: expensas y ABL (medianas de la celda) + servicios "
+        f"USD {S.SERVICIOS_ARS_MES / S.TC_ARS_USD:,.0f}/mes")
     rep(f"    + amoblamiento {S.AMOBLAMIENTO_USD} en {S.HORIZONTE_ANIOS} anios")
     return t
 
@@ -192,7 +198,7 @@ def main() -> int:
     margen = ((1 - S.COMISION_PLATAFORMA_PCT / 100) * (1 - S.GESTION_TEMPORAL_PCT / 100)
               - S.MANTENIMIENTO_TEMPORAL_PCT / 100)
     fijos_min = (t["expensas_mediana_usd"] + S.SERVICIOS_ARS_MES / 2 / S.TC_ARS_USD
-                 + S.ABL_ARS_MES / S.TC_ARS_USD) * 12
+                 + t["abl_mediano_usd_mes"]) * 12
     eq_min = (t["trad_neta_usd"] + fijos_min) / (t["adr_mediana_usd"] * 365 * margen) * 100
     rep(f"Robustez: con servicios a la mitad y sin amoblamiento, la ocupacion de")
     rep(f"    equilibrio mediana baja a {eq_min.median():.1f}% (de "

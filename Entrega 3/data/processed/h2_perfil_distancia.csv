@@ -1,0 +1,61 @@
+﻿medida,especificacion,tramo_m,efecto_pct,n
+combinada,barrio,300-600,2.4,3658
+combinada,barrio,"600-1,000",-1.7,2023
+combinada,barrio,"1,000-1,500",-8.5,512
+combinada,barrio,"1,500+",-16.0,163
+combinada,barrio,0-300,0.0,4387
+combinada,barrio + controles,300-600,2.3,3658
+combinada,barrio + controles,"600-1,000",-0.6,2023
+combinada,barrio + controles,"1,000-1,500",-6.0,512
+combinada,barrio + controles,"1,500+",-7.2,163
+combinada,barrio + controles,0-300,0.0,4387
+combinada,"barrio + controles, deptos",300-600,2.3,2964
+combinada,"barrio + controles, deptos","600-1,000",-0.6,1479
+combinada,"barrio + controles, deptos","1,000-1,500",-6.2,312
+combinada,"barrio + controles, deptos","1,500+",-1.6,58
+combinada,"barrio + controles, deptos",0-300,0.0,3839
+subte,barrio,300-600,5.2,2769
+subte,barrio,"600-1,000",1.7,1938
+subte,barrio,"1,000-1,500",-0.2,958
+subte,barrio,"1,500+",-8.4,2422
+subte,barrio,0-300,0.0,2656
+subte,barrio + controles,300-600,2.1,2769
+subte,barrio + controles,"600-1,000",0.3,1938
+subte,barrio + controles,"1,000-1,500",-1.5,958
+subte,barrio + controles,"1,500+",-6.1,2422
+subte,barrio + controles,0-300,0.0,2656
+subte,"barrio + controles, deptos",300-600,2.1,2420
+subte,"barrio + controles, deptos","600-1,000",0.5,1605
+subte,"barrio + controles, deptos","1,000-1,500",-1.6,736
+subte,"barrio + controles, deptos","1,500+",-5.8,1431
+subte,"barrio + controles, deptos",0-300,0.0,2460
+tren,barrio,300-600,4.1,1921
+tren,barrio,"600-1,000",4.1,2868
+tren,barrio,"1,000-1,500",2.9,2981
+tren,barrio,"1,500+",-3.9,2322
+tren,barrio,0-300,0.0,651
+tren,barrio + controles,300-600,3.7,1921
+tren,barrio + controles,"600-1,000",3.8,2868
+tren,barrio + controles,"1,000-1,500",3.1,2981
+tren,barrio + controles,"1,500+",-0.9,2322
+tren,barrio + controles,0-300,0.0,651
+tren,"barrio + controles, deptos",300-600,3.2,1638
+tren,"barrio + controles, deptos","600-1,000",3.6,2294
+tren,"barrio + controles, deptos","1,000-1,500",3.2,2404
+tren,"barrio + controles, deptos","1,500+",0.1,1755
+tren,"barrio + controles, deptos",0-300,0.0,561
+metrobus,barrio,300-600,-1.4,1739
+metrobus,barrio,"600-1,000",-0.9,1951
+metrobus,barrio,"1,000-1,500",-3.6,1776
+metrobus,barrio,"1,500+",-6.2,3489
+metrobus,barrio,0-300,0.0,1788
+metrobus,barrio + controles,300-600,1.4,1739
+metrobus,barrio + controles,"600-1,000",2.0,1951
+metrobus,barrio + controles,"1,000-1,500",1.6,1776
+metrobus,barrio + controles,"1,500+",-1.3,3489
+metrobus,barrio + controles,0-300,0.0,1788
+metrobus,"barrio + controles, deptos",300-600,1.2,1363
+metrobus,"barrio + controles, deptos","600-1,000",2.2,1573
+metrobus,"barrio + controles, deptos","1,000-1,500",2.1,1384
+metrobus,"barrio + controles, deptos","1,500+",0.6,2854
+metrobus,"barrio + controles, deptos",0-300,0.0,1478

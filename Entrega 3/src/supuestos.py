@@ -213,6 +213,19 @@ HORIZONTE_ANIOS = 5              # vencimiento YMCXO (2031) desde 2026
 
 
 # ==========================================================================
+# 4b2. ACCESIBILIDAD
+# ==========================================================================
+# Radio de lectura de la distancia a la red de transporte (espacial.py): que
+# parte de los avisos queda "a distancia caminable" de una estacion. No entra
+# en ningun calculo de rentabilidad; solo resume la medida, que es continua.
+# Se define en minutos de caminata y no en metros, que es como se lo piensa
+# un inquilino. ESTIMACION PROPIA: diez minutos a un paso de 4,8 km/h.
+MINUTOS_CAMINATA = 10            # estimacion propia
+VELOCIDAD_CAMINATA_M_MIN = 80    # 4,8 km/h, estimacion propia
+RADIO_CAMINATA_M = MINUTOS_CAMINATA * VELOCIDAD_CAMINATA_M_MIN
+
+
+# ==========================================================================
 # 4c. ALQUILER TEMPORAL (la alternativa de explotacion)
 # ==========================================================================
 # Se compara neta contra neta con el tradicional. La asimetria que mas pesa:

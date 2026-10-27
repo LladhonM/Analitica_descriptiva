@@ -9,15 +9,17 @@ venv/
 #
 #   py src/limpieza.py --tc 1500   -> dataset_limpio, dataset_excluidos
 #   py src/variables.py            -> dataset_variables
+#   py src/espacial.py             -> dataset_espacial
 #   py src/kpis.py                 -> dataset_analitico  <- ESTE SI se versiona
 #
-# Los intermedios pesan ~60 MB entre los tres y no se pueden mergear.
+# Los intermedios pesan ~90 MB entre los cuatro y no se pueden mergear.
 # El dataset_analitico.csv, en cambio, es el entregable: es la matriz final
 # con los KPIs materializados, y la consigna pide que /data/processed exista
 # en el repositorio.
 # ---------------------------------------------------------------------------
 data/processed/dataset_limpio.csv
 data/processed/dataset_variables.csv
+data/processed/dataset_espacial.csv
 data/processed/dataset_excluidos.csv
 
 .ipynb_checkpoints/

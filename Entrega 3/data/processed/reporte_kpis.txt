@@ -2,8 +2,8 @@
 ============================================================================
 MATERIALIZACION DE KPIs
 ============================================================================
-Fecha   : 2026-10-27 16:58
-Entrada : data/processed/dataset_variables.csv
+Fecha   : 2026-10-27 17:24
+Entrada : data/processed/dataset_espacial.csv
 Supuestos: vacancia 5.88%, gastos 14.04%
 
 Presupuesto del inversor : USD 80,000 a 200,000
@@ -288,7 +288,7 @@ a todos. Dejaria de serlo con una vacancia distinta por barrio, que
 este trabajo no mide.
 
 Archivos generados:
-    data/processed\dataset_analitico.csv    (12,097 filas x 98 columnas)
+    data/processed\dataset_analitico.csv    (12,097 filas x 106 columnas)
     data/processed\ranking_barrios.csv
     data/processed\modelo_alquiler.joblib
     data/processed\sensibilidad_supuestos.csv

@@ -1,10 +1,10 @@
 # Diccionario de datos — `dataset_analitico.csv`
 
-Matriz final del pipeline: **12.097 filas × 98 columnas**, una fila por aviso
+Matriz final del pipeline: **12.097 filas × 106 columnas**, una fila por aviso
 residencial de RE/MAX en CABA (10.749 en venta y 1.348 en alquiler), con las variables
-curadas, las extraídas del texto y los cuatro KPIs materializados. Es la que construyó
-la 2da pre-entrega, sin cambios: las columnas que agregue esta entrega se documentan acá
-cuando entren al pipeline.
+curadas, las extraídas del texto, las de accesibilidad y los cuatro KPIs materializados.
+Las 98 columnas de la 2da pre-entrega no cambian; esta entrega suma las 8 de la
+sección 9.
 
 | Atributo | Valor |
 |---|---|
@@ -12,7 +12,7 @@ cuando entren al pipeline.
 | Fuente primaria | API JSON pública de RE/MAX Argentina (listado `findAll` y ficha `findBySlug`), scrapeada en la 1ra entrega |
 | Fecha de captura | 16 de agosto de 2026, hora argentina (`fecha_scraping` está en UTC y cruza al 17) |
 | Origen en disco | `data/raw/dataset_maestro.csv` (14.867 avisos × 55 columnas) |
-| Generado por | `src/limpieza.py --tc 1500` → `src/variables.py` → `src/kpis.py` |
+| Generado por | `src/limpieza.py --tc 1500` → `src/variables.py` → `src/espacial.py` → `src/kpis.py` |
 | Codificación | CSV UTF-8 con BOM (`utf-8-sig`), separador coma, decimal punto |
 | Tipo de cambio | **ARS 1.500 por USD**, fijo para todo el dataset (el implícito en los alquileres publicados es 1.110) |
 
@@ -43,9 +43,10 @@ dataset_maestro.csv  (14.867 × 55)
   │               P5 monedas · P6 outliers · P7 derivadas · P8 columnas · P9 nulos
   │               → 2.770 filas excluidas, con motivo, en dataset_excluidos.csv
   │ variables.py  RegEx sobre título + descripción + detalles → 35 dummies + 5 de estructura
+  │ espacial.py   distancia a subte, tren, Metrobús, plazas y parques → 8 de accesibilidad
   │ kpis.py       modelo Ridge de alquiler → 4 KPIs
   ▼
-dataset_analitico.csv  (12.097 × 98)
+dataset_analitico.csv  (12.097 × 106)
 ```
 
 ---
@@ -237,6 +238,25 @@ gastos del propietario de 14,04%.
 | `rent_bruta_min` | **KPI 4**: extremo inferior de la banda de incertidumbre | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 − error_estimacion)` |
 | `rent_bruta_max` | **KPI 4**: extremo superior de la banda | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 + error_estimacion)` |
 
+## 9. Accesibilidad (`espacial.py`)
+
+Distancias desde las coordenadas de cada aviso a las capas de Buenos Aires Data, con
+BallTree y métrica haversine (distancia sobre la esfera). Existen para ventas y
+alquileres. **Son nulas en los 7 avisos sin coordenadas**: el nulo es faltante y no se
+imputa, por la misma razón que no se imputan `latitud` y `longitud`. Las capas y sus
+limitaciones están en `informe/FUENTES_EXTERNAS.md` (fichas 6 a 9).
+
+| Variable | Significado | Tipo | Unidad | Fuente | Transformaciones |
+|---|---|---|---|---|---|
+| `dist_subte_m` | Distancia a la boca de subte más cercana | Decimal | Metros | Derivada, `espacial.py`; capa de bocas de subte (Sbase) | Línea recta sobre la esfera, redondeada al metro. No incluye el Premetro |
+| `dist_tren_m` | Distancia a la estación de tren más cercana | Decimal | Metros | Ídem; capa de estaciones ferroviarias | Incluye estaciones del conurbano: un aviso junto a la General Paz puede tener la más cercana del otro lado |
+| `dist_metrobus_m` | Distancia a la parada de Metrobús más cercana | Decimal | Metros | Ídem; capa de estaciones de Metrobús | Una parada por sentido |
+| `dist_transporte_m` | **Medida de accesibilidad**: distancia a la estación más cercana de cualquiera de las tres redes masivas | Decimal | Metros | Derivada, `espacial.py` | Mínimo de `dist_subte_m`, `dist_tren_m` y `dist_metrobus_m`, sin pesos |
+| `modo_cercano` | Red de la estación más cercana | Categórica: `subte`, `tren`, `metrobus` | — | Derivada, `espacial.py` | La que da el mínimo |
+| `estacion_cercana` | Nombre de esa estación o parada | Texto | — | Capa correspondiente | Tal como lo publica la capa |
+| `dist_plaza_m` | Distancia al borde de la plaza o parque más cercano | Decimal | Metros | Derivada, `espacial.py`; capa de espacios verdes públicos | Excluye canteros centrales y espacios de menos de 1.000 m². El borde se aproxima con los vértices del polígono en una grilla de 4 decimales (error menor a 7 m) |
+| `dist_parque_m` | Distancia al borde del parque más cercano | Decimal | Metros | Ídem | Solo espacios de 1 hectárea o más. Nunca es menor que `dist_plaza_m` |
+
 ---
 
 ## Advertencias de uso
@@ -259,3 +279,7 @@ gastos del propietario de 14,04%.
    `<variable>_imputada == 1`.
 6. **La cartera de RE/MAX no es el mercado.** Está sesgada en precio y en cobertura
    geográfica; el detalle está en `informe/FUENTES_EXTERNAS.md` y en `sesgo_*.csv`.
+7. **Una distancia no es accesibilidad.** Las columnas `dist_*` miden línea recta: no
+   ven vías, autopistas ni el Riachuelo, ni la frecuencia del servicio. Un aviso a
+   300 m de una estación con un tren por hora no está tan conectado como uno a 300 m
+   de un subte, aunque las dos columnas digan lo mismo.

@@ -2,7 +2,7 @@
 ==========================================================================
 INGENIERIA DE VARIABLES DESDE TEXTO LIBRE
 ==========================================================================
-Fecha        : 2026-10-27 16:57
+Fecha        : 2026-10-27 17:23
 Filas        : 12,097
 Largo del texto por aviso: mediana 1,599 caracteres, minimo 37, maximo 13,911
 Avisos con texto insuficiente (<20 caracteres): 0

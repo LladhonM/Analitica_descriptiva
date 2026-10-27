@@ -1,0 +1,98 @@
+
+============================================================================
+FUSION ESPACIAL
+============================================================================
+Fecha   : 2026-10-27 17:23
+Entrada : data/processed/dataset_variables.csv
+
+============================================================================
+CAPAS
+============================================================================
+    subte_bocas          379 puntos     6 lineas/corredores   descarga 2026-10-27
+    subte_estaciones      90 puntos     6 lineas/corredores   descarga 2026-10-27
+    tren                 301 puntos     8 lineas/corredores   descarga 2026-10-27
+    metrobus             390 puntos    20 lineas/corredores   descarga 2026-10-27
+    espacios verdes      608 poligonos (136 parques de 1 ha o mas), 70,018 vertices
+
+Control: de 90 estaciones de subte vigentes, 0 no tienen una boca a menos de 200 m (maximo 91 m).
+
+============================================================================
+COBERTURA DEL DATO: avisos sin coordenadas
+============================================================================
+Avisos                 : 12,097
+Sin coordenadas        : 7 (0.06%)
+
+    barrio               comuna  venta  alquiler
+    floresta                 10      1         0
+    palermo                  14      4         0
+    villa lugano              8      1         0
+    villa real               10      0         1
+
+Tasa de faltantes por comuna (% de los avisos de la comuna):
+    comuna 8 0.51%, comuna 10 0.32%, comuna 14 0.29%; las otras 12, 0%.
+
+============================================================================
+DISTANCIAS (m), avisos con coordenadas
+============================================================================
+                               p10     p25  mediana     p75     p90     max
+    dist_subte_m               166     300      580   1,234   2,862   5,798
+    dist_tren_m                367     607      980   1,421   1,766   2,872
+    dist_metrobus_m            197     445      966   1,749   2,237   3,271
+    dist_transporte_m          113     206      363     596     842   2,872
+    dist_plaza_m                73     155      278     440     596   1,059
+    dist_parque_m              181     379      680   1,031   1,420   2,675
+
+Modo de la red mas cercana: subte 48.2%, metrobus 29.9%, tren 22.0%
+
+============================================================================
+ACCESO A MENOS DE 800 m (10 minutos a pie), por comuna
+============================================================================
+    comuna  avisos   subte    tren  metrob.  combin.  med. subte  med. comb.   red mas cercana no es subte
+         1    1067   92.0%   19.0%    90.3%    99.6%       277 m       217 m                         34.6%
+         2     677   96.8%    1.0%    11.2%    97.9%       344 m       338 m                          5.9%
+         3     826   99.9%   28.2%    19.5%   100.0%       238 m       230 m                          4.5%
+         4     412   39.1%   23.8%    63.8%    74.5%     1,002 m       429 m                         85.4%
+         5     791   97.3%    4.3%     7.6%    99.9%       368 m       363 m                          5.2%
+         6     962   78.6%   33.6%     4.9%    84.8%       424 m       381 m                         25.4%
+         7     747   81.0%   35.5%    34.1%    91.0%       479 m       381 m                         35.7%
+         8     197    0.0%   29.4%    55.8%    72.1%     4,374 m       471 m                        100.0%
+         9     395    2.0%   18.2%    37.0%    45.6%     4,099 m       901 m                         96.2%
+        10     616    6.5%   38.3%    69.6%    70.3%     2,876 m       492 m                         99.7%
+        11     902    0.0%   47.5%    56.0%    75.3%     2,858 m       468 m                        100.0%
+        12     978   33.8%   75.3%    14.9%    84.7%     1,101 m       520 m                         74.2%
+        13    1276   60.0%   83.2%    75.1%    96.6%       699 m       306 m                         87.5%
+        14    1352   72.0%   46.9%    51.8%    89.6%       560 m       376 m                         45.3%
+        15     892   72.5%   40.5%    42.4%    93.2%       539 m       362 m                         41.1%
+     total   12090   62.2%                     88.4%
+
+Avisos fuera del radio del subte que la combinacion pone dentro: 3,164 (26.2% del total).
+
+============================================================================
+HETEROGENEIDAD DENTRO DEL BARRIO (dist_transporte_m)
+============================================================================
+Barrios con 30+ avisos: 44. En 20 conviven avisos dentro y fuera de los 800 m (entre 10% y 90% dentro):
+un promedio barrial les asignaria a todos el mismo acceso.
+
+    barrio                 avisos     p10  mediana     p90   dentro
+    mataderos                 143     461    1,419   2,358    23.8%
+    monte castro              153     622    1,239   1,553    15.0%
+    villa lugano              164     184      536   1,530    66.5%
+    liniers                   160     242      761   1,521    54.4%
+    parque avellaneda          92     149      616   1,519    64.1%
+    barracas                  185     367      820   1,275    47.0%
+    villa devoto              382     175      498   1,261    73.3%
+    villa del parque          295     110      479   1,127    70.5%
+    villa santa rita          112     112      454   1,023    72.3%
+    villa urquiza             497     210      474   1,010    80.5%
+    caballito                 962     142      381     913    84.8%
+    parque chacabuco          212     131      487     899    84.4%
+    villa luro                155     142      466     865    86.5%
+    versalles                  49     164      399     857    83.7%
+    saavedra                  260     174      552     838    88.5%
+    chacarita                 126     208      493     814    84.9%
+    palermo                  1352     148      376     812    89.6%
+    colegiales                225     144      537     805    88.0%
+    villa pueyrredon          123     336      590     801    89.4%
+    coghlan                    98     174      614     796    89.8%
+
+Archivo: data/processed/dataset_espacial.csv  (12,097 filas x 95 columnas, 8 nuevas)

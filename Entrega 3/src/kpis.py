@@ -310,7 +310,9 @@ def sensibilidad(out: pd.DataFrame, rank: pd.DataFrame, rep: M.Reporte) -> pd.Da
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--input", default="data/processed/dataset_variables.csv")
+    # Entra despues de espacial.py, para que la matriz final lleve tambien las
+    # distancias a la red de transporte.
+    p.add_argument("--input", default="data/processed/dataset_espacial.csv")
     p.add_argument("--outdir", default="data/processed")
     # Los defaults salen de supuestos.py y no de las constantes del modelo:
     # ahi estan con fuente y desagregados. El modelo sigue recibiendo un solo
@@ -321,7 +323,7 @@ def main() -> int:
 
     if not os.path.exists(args.input):
         print(f"No existe {args.input}")
-        print("Corré primero:  py src/limpieza.py  &&  py src/variables.py")
+        print("Corré primero:  py src/limpieza.py --tc 1500  &&  py src/variables.py  &&  py src/espacial.py")
         return 1
 
     rep = M.Reporte()

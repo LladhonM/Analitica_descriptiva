@@ -52,6 +52,7 @@ Salidas (en data/processed/):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 from datetime import datetime
@@ -59,6 +60,7 @@ from datetime import datetime
 import joblib
 import numpy as np
 import pandas as pd
+import sklearn
 from sklearn.model_selection import KFold, cross_val_predict
 
 import costos as C
@@ -72,7 +74,8 @@ import supuestos as S
 COLUMNAS_KPI = [
     "alquiler_est_usd_mes", "alquiler_est_m2", "n_alq_barrio",
     "estimacion_confiable", "rent_bruta_pct", "rent_neta_pct",
-    "meses_repago", "error_estimacion", "rent_bruta_min", "rent_bruta_max",
+    "meses_repago", "alquiler_p10_usd_mes", "alquiler_p90_usd_mes",
+    "rent_bruta_min", "rent_bruta_max",
     "abl_ars_mes", "abl_pct", "gastos_pct",
     "costos_entrada_pct", "refaccion_usd", "alquiler_post_refaccion_usd_mes", "tir_5a_pct",
 ]
@@ -210,16 +213,16 @@ def resumen_kpis(out: pd.DataFrame, rep: M.Reporte) -> None:
     rep(f"    En este mercado eso es inusual y amerita revisar el aviso.")
     rep("")
 
-    rep("KPI 4 — Banda de incertidumbre")
-    rep(f"    error mediano aplicado : {ok['error_estimacion'].median() * 100:.1f}%")
-    rep(f"    ancho mediano de banda : "
-        f"{(ok['rent_bruta_max'] - ok['rent_bruta_min']).median():.2f} puntos porcentuales")
+    rep("KPI 4 — Banda de incertidumbre (percentiles 10 y 90 del alquiler, calibrados)")
+    ancho = ok["rent_bruta_max"] - ok["rent_bruta_min"]
+    rep(f"    ancho mediano de banda : {ancho.median():.2f} puntos porcentuales")
     rep("")
-    rep("    Error por tramo de superficie (por que la banda no es unica):")
+    rep("    Por tramo de superficie y por evidencia del barrio (cada propiedad tiene la suya):")
     seg = pd.cut(ok["sup_total_m2"], M.BINS_SUP, labels=M.LAB_SUP)
-    for s, g in ok.groupby(seg, observed=True):
-        rep(f"        {str(s):<8} n={len(g):>5}   error {g['error_estimacion'].median() * 100:>5.1f}%   "
-            f"banda mediana {(g['rent_bruta_max'] - g['rent_bruta_min']).median():>5.2f} pp")
+    for s, g in ancho.groupby(seg, observed=True):
+        rep(f"        superficie {str(s):<8} n={len(g):>5}   banda mediana {g.median():>5.2f} pp")
+    for s, g in ancho.groupby(M.grupo_evidencia(ok["n_alq_barrio"]).values):
+        rep(f"        alquileres {s:<8} n={len(g):>5}   banda mediana {g.median():>5.2f} pp")
     rep("")
 
     # La pregunta que el KPI 4 existe para responder.
@@ -252,10 +255,11 @@ def aplicar_abl(vta: pd.DataFrame, rep: M.Reporte) -> tuple[pd.DataFrame, float]
         f"p10 {vta['abl_ars_mes'].quantile(.1):,.0f}   p90 {vta['abl_ars_mes'].quantile(.9):,.0f}")
     rep("")
     rep("Por que se mueve: el ABL sigue al valor del inmueble y el alquiler no lo sigue")
-    rep("igual (H1). Por quintil de rentabilidad bruta:")
-    q = pd.qcut(vta["alquiler_est_usd_mes"] * 12 / vta["venta_usd"], 5,
+    rep("igual (H1). Por quintil de rentabilidad bruta, en la base con estimacion confiable:")
+    ok = vta[vta["estimacion_confiable"] == 1]
+    q = pd.qcut(ok["alquiler_est_usd_mes"] * 12 / ok["venta_usd"], 5,
                 labels=["Q1 (rinde menos)", "Q2", "Q3", "Q4", "Q5 (rinde mas)"])
-    for k, g in vta.groupby(q, observed=True)["abl_pct"]:
+    for k, g in ok.groupby(q, observed=True)["abl_pct"]:
         rep(f"    {k:<18} ABL mediano {g.median():>5.2f}% del alquiler")
     return vta, proporcion
 
@@ -532,12 +536,14 @@ def main() -> int:
     rep(f"Alquileres para entrenar : {len(alq):,}")
     rep(f"Ventas a estimar         : {len(vta):,}")
 
-    pipe, smear, err_seg = M.entrenar_y_validar(alq, rep)
+    pipe, smear, metricas = M.entrenar_y_validar(alq, rep)
     M.reportar_coeficientes(pipe, rep)
     comparar_dummies(alq, rep)
 
     cobertura = alq.groupby("barrio").size()
     vta = M.imputar(vta, pipe, smear, cobertura, rep)
+    banda, info_banda = M.banda_cuantilica(alq, vta, rep)
+    vta = vta.join(banda)
     vta["alquiler_post_refaccion_usd_mes"] = alquiler_post_refaccion(vta, pipe, smear)
 
     vta, proporcion = aplicar_abl(vta, rep)
@@ -550,7 +556,7 @@ def main() -> int:
         gastos = args.gastos
         vta["gastos_pct_post"] = args.gastos
     vta["gastos_pct"] = gastos
-    vta = M.calcular_rentabilidad(vta, args.vacancia, gastos, err_seg, rep)
+    vta = M.calcular_rentabilidad(vta, args.vacancia, gastos, rep)
     vta = costos_y_tir(vta, args.vacancia, rep)
     rank = M.ranking_barrios(vta, rep)
 
@@ -571,10 +577,28 @@ def main() -> int:
     rank.to_csv(p2, encoding="utf-8-sig")
     sens.to_csv(p5, index=False, encoding="utf-8-sig")
     ad.to_csv(p6, index=False, encoding="utf-8-sig")
+    # Metadata del modelo: con que se entreno, cuando, sobre que datos y
+    # cuanto rinde fuera de muestra. El hash permite comprobar que el .joblib
+    # corresponde a este dataset y no a una corrida vieja.
+    columnas = M.NUMERICAS + M.CATEGORICAS + M.DUMMIES
+    entrenamiento = alq[columnas + ["alquiler_usd_mes"]].to_csv(index=False).encode("utf-8")
     joblib.dump({
         "pipeline": pipe,
         "smearing": smear,
-        "error_por_segmento": err_seg,
+        "banda": info_banda,
+        "metadata": {
+            "sklearn": sklearn.__version__,
+            "entrenado": datetime.now().isoformat(timespec="seconds"),
+            "entrada": args.input,
+            "hash_entrenamiento_sha256": hashlib.sha256(entrenamiento).hexdigest(),
+            "n_entrenamiento": len(alq),
+            "predictoras": {"numericas": M.NUMERICAS, "categoricas": M.CATEGORICAS,
+                            "dummies": M.DUMMIES},
+            "metricas_validacion": metricas,
+            "cobertura_banda": {"objetivo": M.COBERTURA_OBJETIVO,
+                                "cruda": info_banda["cobertura_cruda"],
+                                "calibrada": info_banda["cobertura_calibrada"]},
+        },
         "vacancia": args.vacancia,
         # None cuando el ABL es segmentado: los gastos son de cada propiedad y
         # estan en la columna gastos_pct del dataset.
@@ -582,7 +606,7 @@ def main() -> int:
         "gastos_sin_abl": S.GASTOS_SIN_ABL_PCT if args.gastos is None else None,
         "abl": "segmentado" if args.gastos is None else "plano",
         "proporcion_vfh": proporcion,
-        "columnas": M.NUMERICAS + M.CATEGORICAS + M.DUMMIES,
+        "columnas": columnas,
     }, p3)
 
     rep("")

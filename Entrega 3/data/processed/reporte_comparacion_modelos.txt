@@ -1,0 +1,48 @@
+
+============================================================================
+MODELO DE ALQUILER: COMPARACION FUERA DE MUESTRA
+============================================================================
+Fecha: 2026-10-27 20:55
+Alquileres: 1,348. Esquema: KFold(5) en las semillas [42, 7, 2026].
+    semilla 42: lista
+    semilla 7: lista
+    semilla 2026: lista
+
+============================================================================
+TABLA COMPARATIVA (promedio de las tres semillas; entre corchetes, minimo y maximo)
+============================================================================
+    modelo                                 R2 en log           error mediano
+    mediana barrio x tramo      0.7505 [0.7428, 0.7551]    15.05% [15.02, 15.08]
+    ridge                       0.8468 [0.8459, 0.8480]    11.42% [11.20, 11.70]
+    ridge + espaciales          0.8466 [0.8457, 0.8480]    11.56% [11.40, 11.80]
+    boosting                    0.8442 [0.8418, 0.8485]    11.41% [11.33, 11.54]
+
+Error relativo mediano por tramo de superficie (promedio de las semillas):
+    modelo                        <35    35-50    50-70   70-100     100+
+    mediana barrio x tramo      12.5%    12.3%    19.6%    20.4%    22.7%
+    ridge                       11.1%     9.6%    12.3%    15.6%    17.0%
+    ridge + espaciales          10.9%     9.6%    12.4%    15.4%    17.1%
+    boosting                     9.4%     9.6%    13.6%    16.4%    19.2%
+
+============================================================================
+DECISION
+============================================================================
+Contra la referencia, el Ridge gana +0.0929 a +0.1030 de R2 segun la semilla.
+ridge + espaciales: -0.0004 a -0.0000 de R2 contra el Ridge (criterio: +0.01 en todas las semillas).
+boosting: -0.0057 a +0.0019 de R2 contra el Ridge (criterio: +0.01 en todas las semillas).
+
+Ninguna alternativa cumple el criterio: el modelo vigente sigue siendo el Ridge de
+21 predictoras, y los KPIs no cambian. Sus coeficientes se leen como variaciones
+porcentuales del alquiler, y ninguna mejora observada paga perder eso.
+
+============================================================================
+BANDA DEL KPI 4: ANTES Y DESPUES
+============================================================================
+Alquileres observados dentro de la banda, fuera de muestra:
+    2da entrega, estimacion +- error mediano del tramo : 50.1%
+    3ra entrega, percentiles 10 y 90 calibrados       : 81.6%  (objetivo 80%)
+La banda anterior era un rango del 50% por construccion: decia 'el alquiler esta entre
+estos dos valores' y acertaba la mitad de las veces. La nueva es mas ancha porque cubre
+lo que dice cubrir.
+
+Archivo: data/processed/comparacion_modelos.csv (12 filas)

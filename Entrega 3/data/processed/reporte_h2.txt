@@ -2,7 +2,7 @@
 ============================================================================
 H2 — PRECIO DEL M2 Y DISTANCIA AL TRANSPORTE
 ============================================================================
-Fecha: 2026-10-27 18:07
+Fecha: 2026-10-27 20:55
 Base: 10,743 avisos de venta con precio del m2 y coordenadas (todas las ventas:
 H2 es sobre el precio, no depende de la estimacion del alquiler).
 Magnitud y forma; el contraste formal con p-valor va en el paso de tests.

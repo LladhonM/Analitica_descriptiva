@@ -2,7 +2,7 @@
 ============================================================================
 MATERIALIZACION DE KPIs
 ============================================================================
-Fecha   : 2026-10-27 18:06
+Fecha   : 2026-10-27 20:55
 Entrada : data/processed/dataset_espacial.csv
 Supuestos: vacancia 5.88%, gastos 10.24% + ABL de cada propiedad
 
@@ -59,7 +59,7 @@ Error por segmento de superficie:
 
     El error crece con la superficie. Como las ventas son mas grandes
     que los alquileres, el error real sobre las ventas es mayor que el
-    global. Por eso se asigna la banda por segmento y no una unica.
+    global: un error unico subestimaria la incertidumbre.
 
 Factor de smearing (Duan)      : 1.0193   (residuos out-of-fold)
 
@@ -136,6 +136,26 @@ Alquiler estimado — mediana    : USD 757/mes
 Alquiler estimado — rango p5-p95: USD 391 a 2,429
 
 ============================================================================
+BANDA DE INCERTIDUMBRE (KPI 4): REGRESION CUANTILICA CONFORMALIZADA
+============================================================================
+Penalizacion L1 (perdida pinball fuera de muestra, menor es mejor):
+    alpha 0.0     0.07412
+    alpha 0.0005  0.07214
+    alpha 0.001   0.07139   <- elegida
+    alpha 0.002   0.07304
+    alpha 0.005   0.07536
+
+Cobertura fuera de muestra (objetivo 80%): cruda 77.5%, calibrada 81.6%
+    grupo    alquileres    cruda  calibrada  ensanche  ancho p90/p10
+    <10              83    80.7%      84.3%    +1.4%          1.61x
+    10-29           301    76.7%      83.1%    +1.2%          1.63x
+    30-99           490    76.1%      80.0%    +2.4%          1.63x
+    100+            474    78.9%      81.9%    +0.6%          1.64x
+
+cruda    : la regresion cuantilica sola. calibrada: con el ajuste de su grupo, medido
+           con validacion anidada. ensanche: cuanto se corre cada borde de la banda.
+
+============================================================================
 ABL SEGMENTADO (Ley Tarifaria 6927, arts. 41 a 45)
 ============================================================================
 Proporcion VFH / valor de mercado calibrada : 14.99% (tope legal 20%, Codigo Fiscal art. 288)
@@ -145,12 +165,12 @@ ABL como % del alquiler: mediana 3.78%   p10 2.45%   p90 5.48%   (plano: 3.80% p
 ABL en pesos por mes   : mediana 44,123   p10 20,442   p90 112,283
 
 Por que se mueve: el ABL sigue al valor del inmueble y el alquiler no lo sigue
-igual (H1). Por quintil de rentabilidad bruta:
-    Q1 (rinde menos)   ABL mediano  4.58% del alquiler
-    Q2                 ABL mediano  4.18% del alquiler
-    Q3                 ABL mediano  3.84% del alquiler
-    Q4                 ABL mediano  3.46% del alquiler
-    Q5 (rinde mas)     ABL mediano  2.90% del alquiler
+igual (H1). Por quintil de rentabilidad bruta, en la base con estimacion confiable:
+    Q1 (rinde menos)   ABL mediano  4.65% del alquiler
+    Q2                 ABL mediano  4.29% del alquiler
+    Q3                 ABL mediano  3.99% del alquiler
+    Q4                 ABL mediano  3.62% del alquiler
+    Q5 (rinde mas)     ABL mediano  3.19% del alquiler
 
 ============================================================================
 KPIs DE RENTABILIDAD
@@ -158,21 +178,16 @@ KPIs DE RENTABILIDAD
 Vacancia supuesta              : 5.9%
 Gastos del propietario         : por propiedad, mediana 14.02% (p10 12.69%, p90 15.72%)
 
-Error ponderado sobre las ventas: 13.5%
-    (mayor que el error global de validacion, porque las ventas son
-     mas grandes que los alquileres y ahi el modelo pierde precision)
+Banda p10-p90 de la bruta: ancho mediano 3.57 pp (p10 2.26, p90 6.97)
+    la estimacion puntual cae dentro de su banda en el 100.0% de las ventas
 
 Rentabilidad bruta — mediana   : 7.01%
 Rentabilidad bruta — p25 a p75 : 5.98% a 8.31%
 Rentabilidad neta — mediana    : 5.65%
 Meses de repago — mediana      : 171 (14.2 años)
 
-Lectura de la incertidumbre:
-    rentabilidad estimada 5%  ->  real entre 4.3% y 5.7%
-    rentabilidad estimada 6%  ->  real entre 5.2% y 6.8%
-    rentabilidad estimada 8%  ->  real entre 6.9% y 9.1%
-
-Sirve para rankear barrios, no para decidir sobre un inmueble puntual.
+Lectura de la incertidumbre (mediana de la base):
+    rentabilidad bruta 7.01%  ->  banda de 5.37% a 8.85%
 
 ============================================================================
 COSTOS DE ENTRADA, REFACCION Y TIR A 5 ANIOS
@@ -256,9 +271,10 @@ Columnas de KPI incorporadas:
     rent_bruta_pct           mediana       7.17   p5      4.76   p95     12.25
     rent_neta_pct            mediana       5.78   p5      3.81   p95     10.06
     meses_repago             mediana     167.00   p5     98.00   p95    252.00
-    error_estimacion         mediana       0.12   p5      0.10   p95      0.17
-    rent_bruta_min           mediana       6.24   p5      4.10   p95     10.51
-    rent_bruta_max           mediana       8.09   p5      5.40   p95     14.17
+    alquiler_p10_usd_mes     mediana     585.69   p5    326.03   p95  1,643.79
+    alquiler_p90_usd_mes     mediana     976.52   p5    474.58   p95  3,529.47
+    rent_bruta_min           mediana       5.53   p5      3.48   p95      9.32
+    rent_bruta_max           mediana       9.12   p5      6.14   p95     17.75
     abl_ars_mes              mediana  44,123.00   p5 16,828.00   p95 152,944.60
     abl_pct                  mediana       3.78   p5      2.08   p95      6.01
     gastos_pct               mediana      14.02   p5     12.32   p95     16.25
@@ -286,18 +302,20 @@ KPI 3 — Meses de repago
     Control de sanidad: 869 unidades repagan en menos de 10 años (9.4%).
     En este mercado eso es inusual y amerita revisar el aviso.
 
-KPI 4 — Banda de incertidumbre
-    error mediano aplicado : 12.3%
-    ancho mediano de banda : 1.78 puntos porcentuales
+KPI 4 — Banda de incertidumbre (percentiles 10 y 90 del alquiler, calibrados)
+    ancho mediano de banda : 3.45 puntos porcentuales
 
-    Error por tramo de superficie (por que la banda no es unica):
-        <35      n= 1031   error  10.4%   banda mediana  1.50 pp
-        35-50    n= 2018   error   9.7%   banda mediana  1.34 pp
-        50-70    n= 2046   error  12.3%   banda mediana  1.66 pp
-        70-100   n= 1816   error  15.4%   banda mediana  2.10 pp
-        100+     n= 2292   error  17.4%   banda mediana  2.58 pp
+    Por tramo de superficie y por evidencia del barrio (cada propiedad tiene la suya):
+        superficie <35      n= 1031   banda mediana  2.61 pp
+        superficie 35-50    n= 2018   banda mediana  2.92 pp
+        superficie 50-70    n= 2046   banda mediana  3.23 pp
+        superficie 70-100   n= 1816   banda mediana  3.61 pp
+        superficie 100+     n= 2292   banda mediana  4.92 pp
+        alquileres 10-29    n= 2845   banda mediana  3.89 pp
+        alquileres 100+     n= 2521   banda mediana  3.17 pp
+        alquileres 30-99    n= 3837   banda mediana  3.46 pp
 
-    3,834 propiedades (41.7%) tienen una banda que
+    6,183 propiedades (67.2%) tienen una banda que
     contiene la mediana del mercado: su diferencia contra el promedio
     no se distingue del error de estimacion.
 
@@ -362,7 +380,7 @@ Lectura: la mediana va de 3.33% a 5.78% en la grilla B, y los barrios sobre el p
     La definicion del ABL lleva el Spearman del ranking hasta 0.9963; los costos de entrada, hasta 0.9905.
 
 Archivos generados:
-    data/processed\dataset_analitico.csv    (12,097 filas x 113 columnas)
+    data/processed\dataset_analitico.csv    (12,097 filas x 114 columnas)
     data/processed\ranking_barrios.csv
     data/processed\modelo_alquiler.joblib
     data/processed\sensibilidad_supuestos.csv

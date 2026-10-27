@@ -440,6 +440,12 @@ MIN_CELDA_TEMPORAL = 20
 # predictoras imputadas; por eso queda como criterio declarado y no como
 # constante.
 
+# Criterio para reemplazar el Ridge por otro modelo (comparacion_modelos.py):
+# tiene que mejorar el R2 fuera de muestra en al menos esto, en TODAS las
+# particiones. Una mejora menor no paga la perdida de coeficientes legibles.
+# Criterio propio, declarado antes de mirar el resultado.
+MEJORA_MINIMA_R2 = 0.01
+
 MIN_VENTAS_BARRIO = 30           # barrio entra al ranking y a los violines
 MIN_AVISOS_TRAMO = 20            # tramo de superficie entra al boxplot
 MIN_AVISOS_CELDA = 10            # celda barrio x tramo: estrato de comparacion

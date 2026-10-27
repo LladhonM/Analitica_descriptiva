@@ -1,11 +1,12 @@
 # Diccionario de datos — `dataset_analitico.csv`
 
-Matriz final del pipeline: **12.097 filas × 113 columnas**, una fila por aviso
+Matriz final del pipeline: **12.097 filas × 114 columnas**, una fila por aviso
 residencial de RE/MAX en CABA (10.749 en venta y 1.348 en alquiler), con las variables
 curadas, las extraídas del texto, las de accesibilidad, los cuatro KPIs materializados y
-los costos del propietario. Esta entrega suma las 8 columnas de la sección 9 y las 7 de
-la sección 8.1, y cambia una de la 2da: `rent_neta_pct` pasa a usar el ABL de cada
-propiedad en lugar de un porcentaje plano.
+los costos del propietario. Esta entrega suma las 8 columnas de la sección 9, las 7 de
+la sección 8.1 y los percentiles 10 y 90 del alquiler. Cambian tres de la 2da:
+`rent_neta_pct` usa el ABL de cada propiedad, y `rent_bruta_min` y `rent_bruta_max`
+salen de esos percentiles. Sale `error_estimacion`, la banda anterior.
 
 | Atributo | Valor |
 |---|---|
@@ -47,7 +48,7 @@ dataset_maestro.csv  (14.867 × 55)
   │ espacial.py   distancia a subte, tren, Metrobús, plazas y parques → 8 de accesibilidad
   │ kpis.py       modelo Ridge de alquiler → 4 KPIs; ABL, costos de entrada y TIR (costos.py)
   ▼
-dataset_analitico.csv  (12.097 × 113)
+dataset_analitico.csv  (12.097 × 114)
 ```
 
 ---
@@ -102,7 +103,7 @@ para su operación**: el nulo de la otra es estructural.
 | `sup_total_m2` | Superficie total | Decimal | m² | RE/MAX `dimensionTotalBuilt` (o `dimensionLand` si falta) | Excluidos nulos, < 10 m² y > 2.000 m² (P4); 1 superficie anulada por inconsistente (P1). Rango final: 13,4 a 1.100 |
 | `sup_cubierta_m2` | Superficie cubierta | Decimal | m² | RE/MAX `dimensionCovered` | Ninguna, salvo la anulación de P1 |
 | `ratio_cubierta` | Proporción cubierta de la superficie total | Decimal | Proporción (0 a 1) | Derivada, `limpieza P7` | `sup_cubierta_m2 / sup_total_m2`; nulo si es ≤ 0 o > 1,05 (7 nulos) |
-| `superficie_rango` | Tramo de superficie total | Categórica ordinal: `hasta 35`, `36-55`, `56-80`, `81-120`, `120+` | m² | Derivada, `limpieza P7` | Cortes en 35, 55, 80 y 120. **No** son los tramos de `error_estimacion` |
+| `superficie_rango` | Tramo de superficie total | Categórica ordinal: `hasta 35`, `36-55`, `56-80`, `81-120`, `120+` | m² | Derivada, `limpieza P7` | Cortes en 35, 55, 80 y 120. **No** son los tramos con que se mide el error del modelo (`modelo_alquiler.BINS_SUP`: 35, 50, 70 y 100) |
 | `log_sup` | Logaritmo natural de la superficie total | Decimal | ln(m²) | Derivada, `kpis.py` (`modelo_alquiler.preparar`) | `ln(sup_total_m2)`. Predictora del modelo de alquiler |
 | `ambientes` | Cantidad de ambientes | Entero | Conteo | RE/MAX `totalRooms` | Valores > 15 → nulo (P4); 4 imputados con la mediana de `superficie_rango` y redondeados (P9) |
 | `dormitorios` | Cantidad de dormitorios (0 = monoambiente) | Entero | Conteo | Ficha RE/MAX `bedrooms` | Valores > 12 → nulo (P4); 1 imputado con la mediana de `superficie_rango` y redondeado (P9) |
@@ -236,9 +237,10 @@ gastos del propietario que son de cada propiedad: 10,24% iguales para todas
 | `rent_bruta_pct` | **KPI 1**: rentabilidad bruta anual | Decimal | % anual | Derivada, `kpis.py` | `alquiler_est_usd_mes × 12 / venta_usd × 100`, a 2 decimales |
 | `rent_neta_pct` | **KPI 2**: rentabilidad neta anual | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 − 0,0588) × (1 − gastos_pct / 100)`, a 2 decimales. Las expensas ordinarias no se descuentan: las paga el inquilino. Hasta la 2da entrega los gastos eran 14,04% para todas |
 | `meses_repago` | **KPI 3**: meses de alquiler para recuperar el precio | Entero | Meses | Derivada, `kpis.py` | `venta_usd / alquiler_est_usd_mes`, redondeado. Recupero simple: sin descuento, sin valor residual, sin inflación |
-| `error_estimacion` | Error relativo mediano del modelo en el tramo de superficie de la propiedad | Decimal, 5 valores | Proporción | Derivada, `kpis.py` | Error fuera de muestra por tramo: < 35 m² → 0,104; 35-50 → 0,097; 50-70 → 0,123; 70-100 → 0,154; 100+ → 0,174 |
-| `rent_bruta_min` | **KPI 4**: extremo inferior de la banda de incertidumbre | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 − error_estimacion)` |
-| `rent_bruta_max` | **KPI 4**: extremo superior de la banda | Decimal | % anual | Derivada, `kpis.py` | `rent_bruta_pct × (1 + error_estimacion)` |
+| `alquiler_p10_usd_mes` | Percentil 10 del alquiler de la propiedad | Decimal | USD/mes | Derivada, `kpis.py` (`modelo_alquiler.banda_cuantilica`) | Regresión cuantílica lineal con las predictoras del Ridge, calibrada por grupo de evidencia del barrio (CQR). Cubre el 81,6% de los alquileres observados fuera de muestra, objetivo 80% |
+| `alquiler_p90_usd_mes` | Percentil 90 del alquiler de la propiedad | Decimal | USD/mes | Ídem | Ídem |
+| `rent_bruta_min` | **KPI 4**: extremo inferior de la banda de incertidumbre | Decimal | % anual | Derivada, `kpis.py` | `alquiler_p10_usd_mes × 12 / venta_usd × 100`. Hasta la 2da entrega era la bruta menos el error mediano del tramo, una banda que cubría el 50% |
+| `rent_bruta_max` | **KPI 4**: extremo superior de la banda | Decimal | % anual | Derivada, `kpis.py` | `alquiler_p90_usd_mes × 12 / venta_usd × 100` |
 
 ### 8.1 Costos del propietario y TIR (`kpis.py` y `costos.py`)
 
@@ -289,8 +291,8 @@ limitaciones están en `informe/FUENTES_EXTERNAS.md` (fichas 6 a 9).
 4. **Hay pares de variables parecidas que miden cosas distintas.**
    - `es_a_estrenar` sale del año de construcción; `estrenar`, del texto.
    - `cocheras` es la cantidad estructurada; `cochera_txt`, la mención en el texto.
-   - `superficie_rango` agrupa para el EDA; los tramos de `error_estimacion` son los
-     del modelo.
+   - `superficie_rango` agrupa para el EDA; los tramos de superficie con que se mide el
+     error del modelo son otros (`modelo_alquiler.BINS_SUP`).
 5. **Hay que separar lo observado de lo imputado.** Para estadísticas de antigüedad,
    expensas, ambientes o dormitorios, conviene excluir o marcar las filas con
    `<variable>_imputada == 1`.

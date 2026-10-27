@@ -1,0 +1,190 @@
+
+==========================================================================
+LIMPIEZA DEL DATASET INMOBILIARIO
+==========================================================================
+Fecha        : 2026-10-27 16:56
+Entrada      : data/raw/dataset_maestro.csv
+Tipo cambio  : 1,500 ARS/USD
+Outliers     : moderado
+Filas leidas : 14,867
+
+--- PASO 1: Correcciones puntuales de errores de carga ------------------------
+    venta -> alquiler (monto y titulo de alquiler)           1 filas
+    moneda USD -> ARS (monto solo coherente en pesos)        4 filas
+    superficie anulada por inconsistente                     1 filas
+
+--- PASO 2: Filtrado a inmuebles de vivienda individual -----------------------
+    tipos excluidos:
+        oficina                        524
+        cochera                        524
+        local                          509
+        terrenos_y_lotes               406
+        deposito                        92
+        galpon                          57
+        edificio                        44
+        consultorio                     34
+        fondo_de_comercio               19
+        hotel                           18
+        otros                            4
+    no_residencial                                   2231 filas
+
+--- PASO 3: Deduplicacion -----------------------------------------------------
+    duplicado_url                                       0 filas
+    duplicado_id                                        0 filas
+    duplicado_mismo_inmueble                          235 filas
+
+--- PASO 4: Valores imposibles ------------------------------------------------
+    precio_ausente_o_cero                              49 filas
+    superficie_menor_a_10m2                             2 filas
+    superficie_mayor_a_2000m2                           5 filas
+    antiguedad fuera de rango -> NaN (fila conservada)     134 filas
+    ambientes > 15 -> NaN (fila conservada)               3 filas
+    dormitorios > 12 -> NaN (fila conservada)             2 filas
+
+--- PASO 5: Normalizacion de monedas (TC = 1,500 ARS/USD) ---------------------
+    TC usado                    :      1,500
+    TC implicito en los datos   :      1,110   (mediana ARS/m2 / mediana USD/m2)
+    desvio                      :      35.1%
+    AVISO: el TC elegido se aleja >30% del implicito.
+           El implicito refleja como el mercado convierte al publicar.
+           Si usás una cotizacion oficial, es esperable cierta brecha;
+           si es muy grande, revisá que el TC corresponda a la fecha del scraping.
+    expensas > 15.0 USD/m2/mes -> anuladas: 7 filas (la peor declaraba USD 74,074,074,074,073 por mes)
+    la fila se conserva: el error esta en la expensa, no en el aviso
+    expensas = 0: 3,255 filas, se conservan como valor real
+        casa            52.7% en cero
+        departamento    17.4% en cero
+        ph              73.2% en cero
+    columnas creadas: precio_usd, expensas_usd, venta_usd,
+                      alquiler_usd_mes, venta_m2_usd, alquiler_m2_usd_mes
+
+--- PASO 6: Outliers de precio/m2 — modo moderado (recorte 1% / 1% por cola) --
+
+    Deteccion matematica comparada — venta_m2_usd (n=10,969)
+    criterio                       inf         sup  marcados       %
+    z-score (3s)               -510.56    4,649.69       100   0.91%
+    z robusto (3.5 MAD)        -766.72    4,747.98        93   0.85%
+    IQR (Tukey 1.5)            -125.89    4,143.71       214   1.95%
+    percentil 1/99              546.51    4,583.63       220   2.01%
+
+    Deteccion matematica comparada — alquiler_m2_usd_mes (n=1,376)
+    criterio                       inf         sup  marcados       %
+    z-score (3s)                  0.73       25.65        25   1.82%
+    z robusto (3.5 MAD)           1.75       23.33        44   3.20%
+    IQR (Tukey 1.5)               4.16       21.28        61   4.43%
+    percentil 1/99                5.71       28.16        28   2.03%
+
+    Criterio adoptado: percentil. z-score y z robusto suponen una
+    simetria que la distribucion de precios no tiene (asimetria > 0),
+    y el limite inferior que calculan cae en valores negativos o
+    absurdos. El percentil no estima nada: fija de antemano cuanta
+    cola se sacrifica, y eso es auditable.
+    venta     rango valido:     546.51  a   4,583.63 USD/m2
+    outlier_precio_m2_venta                           220 filas
+    alquiler  rango valido:       5.71  a      28.16 USD/m2
+    outlier_precio_m2_alquiler                         28 filas
+
+--- PASO 7: Variables derivadas -----------------------------------------------
+    antiguedad_rango, superficie_rango, ratio_cubierta,
+    expensas_sobre_alquiler, tipo_familia
+
+--- PASO 8: Eliminacion de columnas inutiles ----------------------------------
+    portal                 constante (todo Remax)
+    localidad              constante (todo CABA)
+    precio_texto           redundante con precio_valor + precio_moneda
+    piso                   0.3% de completitud
+    credito_uva            0.4% de prevalencia, sin varianza
+    altura                 redondeada a la cuadra por el portal
+
+--- PASO 9: Auditoria de nulos y estrategia de imputacion ---------------------
+    columnas con al menos un nulo, por naturaleza:
+        faltante        11 columnas
+        estructural      5 columnas
+        informativo      1 columnas
+
+    Imputacion (mediana por grupo, con marca de trazabilidad):
+    antiguedad_anios       131 imputados  (131 por grupo, 0 por mediana global 40.0)
+    expensas_usd           321 imputados  (314 por grupo, 7 por mediana global 86.7)
+
+    De donde salen las expensas faltantes:
+        casa            314 filas, valor imputado     0.0 USD/mes
+        departamento      7 filas, valor imputado   200.0 USD/mes
+    El nulo de una casa es estructural (no hay consorcio), no un
+    dato que el portal omitio. Imputarle la media del mercado seria
+    inventarle un gasto que no existe.
+
+    ambientes                4 imputados  (4 por grupo, 0 por mediana global 3.0)
+    dormitorios              1 imputados  (1 por grupo, 0 por mediana global 2.0)
+
+    tiene_detalles        2173 avisos sin seccion de detalles -> dummy en vez de imputacion
+    completitud_aviso    mediana 1.00 sobre 11 variables clave
+
+    NO se imputan (decision, no omision):
+        latitud / longitud   una coordenada inventada reasigna el barrio
+        venta_* / alquiler_* nulos estructurales: la celda no aplica
+        descripcion          texto libre; imputarlo contaminaria el RegEx
+    auditoria guardada en data/processed\auditoria_calidad.csv
+
+==========================================================================
+RESUMEN
+==========================================================================
+Filas iniciales :  14,867
+Filas excluidas :   2,770  (18.6%)
+Filas limpias   :  12,097  (81.4%)
+Columnas        :      66
+
+Motivos de exclusion:
+    no_residencial                       2231
+    duplicado_mismo_inmueble              235
+    outlier_precio_m2_venta               220
+    precio_ausente_o_cero                  49
+    outlier_precio_m2_alquiler             28
+    superficie_mayor_a_2000m2               5
+    superficie_menor_a_10m2                 2
+
+Composicion final:
+    alquiler     1348
+    venta       10749
+
+    departamento   9948
+    ph           1452
+    casa          697
+
+Completitud de variables clave:
+    venta_usd               88.9%
+    alquiler_usd_mes        11.1%
+    sup_total_m2           100.0%
+    ambientes              100.0%
+    dormitorios            100.0%
+    banos                  100.0%
+    antiguedad_anios       100.0%
+    barrio                 100.0%
+    latitud                 99.9%
+    expensas_usd           100.0%
+
+==========================================================================
+CONTROL: rentabilidad bruta anual por barrio
+==========================================================================
+Formula: (alquiler mediano USD x 12) / venta mediana USD
+Solo barrios con >= 25 alquileres y >= 25 ventas
+
+barrio                n_alq  n_vta   alq_usd   venta_usd   rent %
+------------------------------------------------------------------
+san nicolas              46    225       463      85,000     6.54
+balvanera                45    528       400      84,950     5.65
+san cristobal            26    227       413      88,000     5.64
+villa crespo             39    378       533     119,250     5.37
+almagro                  64    537       483     119,000     4.87
+palermo                 254   1102       650     163,250     4.78
+villa urquiza            59    438       593     159,450     4.47
+flores                   47    488       447     119,950     4.47
+nunez                    61    327       633     170,000     4.47
+caballito               114    848       533     145,000     4.41
+belgrano                 98    565       642     175,000     4.40
+recoleta                106    571       600     169,000     4.26
+villa devoto             31    351       633     197,000     3.86
+
+Archivos generados:
+    data/processed\dataset_limpio.csv
+    data/processed\dataset_excluidos.csv
+    data/processed\reporte_limpieza.txt

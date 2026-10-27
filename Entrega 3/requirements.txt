@@ -1,0 +1,35 @@
+# Versiones exactas: son las que corren el pipeline y los tests de esta
+# entrega (Python 3.13). Con >= una instalacion nueva puede traer otra version
+# de pandas o scikit-learn y mover los KPIs sin que nada falle.
+
+# Analisis y limpieza
+pandas==3.0.5
+numpy==2.3.4
+
+# Modelo de estimacion de alquiler (kpis.py / modelo_alquiler.py)
+scikit-learn==1.9.0
+joblib==1.5.3
+
+# Lectura de los cuadros de IDECBA y del Colegio de Escribanos, que se
+# publican en Excel (fuentes_externas.py)
+openpyxl==3.1.5
+
+# Visualizacion. seaborn para violines y distribuciones; plotly para los
+# graficos interactivos de los notebooks. matplotlib es la base de los dos.
+matplotlib==3.10.7
+seaborn==0.13.2
+plotly==7.0.0
+
+# Estadistica e inferencia de los notebooks
+scipy==1.18.0
+
+# Ejecucion de los notebooks de punta a punta
+nbformat==5.11.1
+nbconvert==7.17.1
+ipykernel==6.29.5
+
+# ---------------------------------------------------------------------------
+# NO se incluyen las dependencias de scraping (requests, curl_cffi, Brotli,
+# zstandard, beautifulsoup4). La extraccion es materia de la 1ra entrega y su
+# carpeta; esta entrega parte de data/raw/dataset_maestro.csv, que se versiona.
+# ---------------------------------------------------------------------------

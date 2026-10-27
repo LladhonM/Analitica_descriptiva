@@ -1,0 +1,120 @@
+
+==========================================================================
+INGENIERIA DE VARIABLES DESDE TEXTO LIBRE
+==========================================================================
+Fecha        : 2026-10-27 16:57
+Filas        : 12,097
+Largo del texto por aviso: mediana 1,599 caracteres, minimo 37, maximo 13,911
+Avisos con texto insuficiente (<20 caracteres): 0
+
+Variables dicotomicas generadas por RegEx: 35
+Variables de estructura extraidas del texto: 5
+    piso_txt recuperado en 39.2% de los avisos (la columna `piso` del crudo tenia 0.3%)
+    disposicion declarada en 53.7% de los avisos
+    n_amenities: mediana 3, maximo 15 sobre 15 posibles
+
+==========================================================================
+AUDITORIA: SUBCADENA (1ra entrega) CONTRA REGEX
+==========================================================================
+atributo               viejo %   nuevo %  delta pp    0->1    1->0
+------------------------------------------------------------------
+a_reciclar                4.3%      4.3%      +0.0       8       7
+amenities                40.4%     41.5%      +1.1    1250    1113
+amoblado                 11.3%      7.7%      -3.6     423     864
+apto_credito             22.6%     21.5%      -1.1      14     149
+ascensor                 43.6%     43.3%      -0.3       2      40
+balcon                   76.1%     63.6%     -12.5       0    1512
+baulera                  15.9%     15.9%      -0.0       0       1
+cochera_txt              30.4%     30.6%      +0.2      80      59
+gimnasio                  9.9%      9.0%      -0.9       0     104
+luminoso                 46.7%     50.5%      +3.8     468       9
+parrilla                 31.1%     28.9%      -2.2       1     270
+patio_jardin             28.9%     28.9%      -0.0       0       3
+pileta                   18.4%     18.2%      -0.2       0      30
+reciclado                 9.8%     13.2%      +3.4     410       0
+
+Descomposicion de las bajas (1 -> 0): mudanza contra correccion
+    balcon      1512 bajas, de las cuales  1476 (97.6%) son mudanza y no correccion
+               motivo: la keyword vieja de balcon incluia 'terraza' y 'aterrazado'
+               ahora viven en la variable `terraza`
+    amoblado     864 bajas, de las cuales   856 (99.1%) son mudanza y no correccion
+               motivo: la keyword vieja incluia 'equipado', que en los avisos califica a la cocina, no al departamento
+
+Los tres errores sistematicos de la busqueda por subcadena:
+
+  1. FRAGMENTO. 'sum' dentro de otra palabra (consumo, resumen, asumir)
+     marca amenities=1 en 1,146 avisos que no tienen ninguno.
+     Sobre 4,883 positivos del metodo viejo, eso es un 23.5% de falsos positivos.
+
+  2. NEGACION. El aviso dice que NO lo tiene y la variable marca 1:
+     balcon         viejo   25 avisos negados marcados 1  ->  nuevo    5
+                    residuo explicado: 5/5 mencionan el atributo mas de una vez (lo niegan en un lugar, lo afirman en otro)
+     cochera_txt    viejo   74 avisos negados marcados 1  ->  nuevo   42
+                    residuo explicado: 42/42 mencionan el atributo mas de una vez (lo niegan en un lugar, lo afirman en otro)
+     amoblado       viejo    0 avisos negados marcados 1  ->  nuevo    0
+     ascensor       viejo   21 avisos negados marcados 1  ->  nuevo    0
+
+  3. ANTONIMO. 'contrafrente' contiene 'frente'. El metodo viejo marcaba
+     frente=1 en 2,172 avisos que declaran ser contrafrente,
+     que es el atributo opuesto. La variable `disposicion` los separa
+     en tres categorias en vez de colapsarlos en una dummy ambigua.
+
+Columnas del scraping reemplazadas por su version RegEx: 19
+    a_reciclar, aire_acondicionado, amenities, amoblado, apto_credito, apto_profesional, ascensor, balcon, baulera, cochera_txt, gimnasio, losa_radiante, luminoso, parrilla, patio_jardin, pileta, reciclado, seguridad, sum
+
+==========================================================================
+PREVALENCIA DE LAS VARIABLES DICOTOMICAS
+==========================================================================
+variable               % de avisos       n
+------------------------------------------
+balcon                       63.6%    7690
+luminoso                     50.5%    6112
+lavadero                     46.0%    5561
+ascensor                     43.3%    5233
+aire_acondicionado           41.4%    5014
+terraza                      37.6%    4550
+oportunidad                  34.2%    4141
+toilette                     30.8%    3722
+cochera_txt                  30.6%    3704
+parrilla                     28.9%    3494
+patio_jardin                 28.9%    3491
+apto_credito                 21.5%    2597
+pileta                       18.2%    2199
+calefaccion                  17.6%    2131
+sum                          17.4%    2108
+baulera                      15.9%    1928
+solarium                     14.3%    1726
+vestidor                     14.2%    1712
+reciclado                    13.2%    1596
+losa_radiante                12.6%    1524
+apto_profesional             11.9%    1441
+laundry                      11.9%    1437
+dependencia                  11.2%    1356
+estrenar                     11.0%    1333
+seguridad                     9.6%    1162
+gimnasio                      9.0%    1094
+financiacion                  8.4%    1017
+amoblado                      7.7%     930
+sauna                         5.6%     672
+a_reciclar                    4.3%     523
+en_pozo                       4.0%     489
+renta_actual                  2.4%     293
+coworking                     2.0%     244
+apto_mascotas                 1.6%     190
+dueno_directo                 0.0%       5
+
+Variables con prevalencia extrema (<1% o >99%): sin poder
+discriminante, no conviene usarlas como predictoras.
+    dueno_directo            0.0%
+
+Control: se prueba cada patron extremo contra un texto de laboratorio
+para separar 'el RegEx falla' de 'el atributo no existe en la fuente'.
+    dueno_directo          detecta el caso sintetico: si
+    Lectura: el patron funciona. La prevalencia es cero porque la
+    fuente es una red inmobiliaria con cartera propia: no hay avisos
+    de particulares. Es una limitacion de la fuente, no del parseo.
+
+Filas    : 12,097
+Columnas : 87
+Guardado : data/processed\dataset_variables.csv
+Reporte  : data/processed\reporte_regex.txt

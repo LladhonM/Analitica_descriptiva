@@ -1,0 +1,96 @@
+
+============================================================================
+ALQUILER TRADICIONAL CONTRA TEMPORAL — NETA CONTRA NETA
+============================================================================
+Fecha: 2026-09-28 20:27
+Celdas barrio x dormitorios con ambos lados: 86
+    con 20+ ventas y 20+ avisos activos: 47
+
+Margen variable del temporal: 0.568 con gestion (18%), 0.720 autogestionado
+    = (1 - plataforma 15.5%) x (1 - gestion) - mantenimiento 12.5%
+Fijos anuales: expensas (mediana de la celda) + servicios USD 111/mes + ABL USD 22/mes
+    + amoblamiento {'0-1': 4000, '2': 6000, '3+': 8000} en 5 anios
+
+============================================================================
+POR BARRIO Y DORMITORIOS
+============================================================================
+barrio             dorm  vtas  abnb  trad%  ocup%  temp%  t@ref%  equil%
+constitucion        0-1    49   167   8.04   13.2  -3.14    6.15    61.1
+barracas            0-1    57    91   6.02   19.7  -0.57    4.62    62.0
+recoleta            0-1   220  1820   5.30   19.7  -0.87    3.94    62.3
+nunez               0-1   179   238   5.14   18.6   0.18    4.05    62.7
+san nicolas         0-1   114  1028   6.17   26.3  -0.47    4.38    62.8
+retiro              0-1    82   602   5.78   19.2  -1.83    4.03    63.1
+colegiales          0-1    75   258   5.06   17.5  -0.48    3.80    63.4
+belgrano            0-1   224   659   4.64   18.1  -0.76    3.24    65.2
+palermo             0-1   564  4464   4.73   23.0  -0.16    3.30    65.4
+almagro             0-1   228   457   5.77   16.4  -1.60    3.86    65.8
+villa crespo        0-1   208   434   5.47   19.7  -0.51    3.78    66.1
+monserrat           0-1   139   601   6.53   18.1  -1.64    4.20    66.9
+balvanera           0-1   235   408   6.60   13.2  -2.94    3.95    68.3
+san telmo           0-1    96   335   6.83   23.0  -0.52    4.31    68.7
+villa del parque    0-1    89    46   5.69   13.2  -1.83    3.57    68.7
+flores              0-1   136    66   6.13   12.3  -2.58    3.71    68.7
+chacarita           0-1    58   210   5.37   18.1  -1.08    3.34    69.1
+villa urquiza       0-1   194   141   5.01   18.1  -0.74    3.18    69.3
+san cristobal       0-1   106    69   6.33   13.2  -2.83    3.49    70.9
+caballito           0-1   298   192   5.71   19.7  -1.30    3.09    72.8
+saavedra            0-1   112    74   5.04   17.8  -0.61    2.95    73.6
+coghlan             0-1    46    40   4.96   15.6  -0.59    2.88    75.3
+villa devoto        0-1   102    40   5.79   20.5  -0.59    3.08    77.0
+parque chacabuco    0-1    54    26   5.89   17.3  -1.94    1.98    88.6
+palermo               2   268   998   4.85   24.7   0.77    4.40    56.5
+san nicolas           2    54   289   6.57   26.3   0.72    5.67    57.9
+recoleta              2   155   487   4.76   21.4  -0.04    4.05    58.5
+monserrat             2    58   109   6.60   29.6   1.28    5.50    59.1
+retiro                2    35   164   4.64   23.0  -0.25    3.80    59.2
+barracas              2    31    21   5.52   21.4  -0.02    4.58    59.5
+villa crespo          2    76    93   5.68   32.9   1.56    4.57    60.4
+chacarita             2    22    38   5.62   11.5  -1.36    4.53    60.7
+colegiales            2    56    74   5.01   11.5  -1.14    3.89    62.2
+belgrano              2   166   143   4.95   14.8  -0.84    3.56    65.0
+balvanera             2   163    93   6.72   14.8  -1.94    4.61    65.3
+almagro               2   159    95   5.38   16.4  -1.11    3.54    67.5
+san telmo             2    36    91   7.28   19.2  -0.99    4.43    70.8
+nunez                 2    80    55   5.10   19.2   0.05    3.28    72.1
+villa urquiza         2   107    23   4.97   14.8  -0.83    2.99    72.8
+caballito             2   229    37   5.18   13.2  -1.53    2.83    74.4
+palermo              3+   200   335   5.22   24.7   1.48    5.54    50.8
+balvanera            3+    85    37   6.82   14.8  -0.66    7.04    51.9
+san nicolas          3+    55   106   7.42   23.0   1.22    7.46    52.8
+monserrat            3+    38    33   7.60   29.6   2.46    7.24    54.7
+retiro               3+    32    68   4.21   21.4   0.02    3.78    56.6
+recoleta             3+   185   201   5.27   21.4   0.03    3.53    68.7
+belgrano             3+   153    49   5.04   17.5  -0.26    3.30    70.2
+
+trad%  : neta del tradicional (supuestos del KPI 2)
+ocup%  : ocupacion estimada por Inside Airbnb (mediana de la celda)
+temp%  : neta del temporal con esa ocupacion y gestion tercerizada
+t@ref% : neta del temporal con la ocupacion de referencia (53%)
+equil% : ocupacion con la que el temporal empata al tradicional
+
+============================================================================
+LECTURA
+============================================================================
+Celdas comparadas: 47
+    el temporal gana con la ocupacion estimada por Inside Airbnb : 0 de 47
+    el temporal gana con ocupacion de 53%                        : 3 de 47
+Ocupacion de equilibrio: mediana 65.3% (rango 50.8% a 88.6%)
+    autogestionado: mediana 51.5%
+Ocupacion estimada por Inside Airbnb en esas celdas: mediana 18.6%
+Robustez: con servicios a la mitad y sin amoblamiento, la ocupacion de
+    equilibrio mediana baja a 54.4% (de 65.3%).
+
+La conclusion depende de una variable que ningun dataset de este trabajo
+observa: la ocupacion. Con la que estima Inside Airbnb el temporal gana en
+0 de 47 celdas; aun con la ocupacion de prensa (53%), gana en 3.
+Para empatar al tradicional, el temporal necesita una ocupacion mayor que
+la que publica la prensa en la mediana de las celdas. El ingreso por noche
+es alto, pero expensas, servicios, plataforma y gestion se lo comen.
+El umbral de equilibrio es lo que el inversor tiene que contrastar con la
+ocupacion que espera lograr.
+
+Costos no cuantificados (sesgan a favor del temporal): internet, seguro,
+eventuales tasas, registros o impuestos propios de la actividad.
+
+Archivo: data/processed/temporal_vs_tradicional.csv (47 filas)

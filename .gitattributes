@@ -12,3 +12,4 @@
 *.zip   -text
 *.xlsx  -text
 *.joblib -text
+*.pbix  -text

@@ -1,0 +1,295 @@
+
+============================================================================
+MATERIALIZACION DE KPIs
+============================================================================
+Fecha   : 2026-10-27 16:58
+Entrada : data/processed/dataset_variables.csv
+Supuestos: vacancia 5.88%, gastos 14.04%
+
+Presupuesto del inversor : USD 80,000 a 200,000
+
+Vacancia                 : 5.88%  (1.5 meses vacios cada contrato de 24)
+
+Gastos del propietario (% del alquiler cobrado):
+    administracion       :  4.15%  comision de locacion, Ley 5859
+    ABL                  :  3.80%  ARS 32,622/mes sobre USD 573 x 1500
+    extraordinarias      :  1.92%  9% de expensas que pesan 21.3%
+    mantenimiento        :  4.17%  0.5 mes de alquiler por anio (estimacion propia)
+    TOTAL                : 14.04%
+
+Retorno minimo (banda)   : 7.10% a 7.60%  (ON corporativas USD, 2031 a 2037)
+    restriccion del analisis, no recomendacion de inversion
+    referencia soberana  : 11.65%  (Treasury 10 anios + 641 pb)
+Horizonte                : 5 anios  (plazo de la ON del piso)
+Alquileres para entrenar : 1,348
+Ventas a estimar         : 10,749
+
+============================================================================
+VALIDACION DEL MODELO (5-fold, fuera de muestra)
+============================================================================
+Observaciones de entrenamiento : 1,348
+Variables                      : 5 numericas, 2 categoricas, 14 dicotomicas
+
+R2 (en log)                    : 0.848
+Error relativo mediano         : 11.2%
+Error relativo medio           : 15.0%
+Predicciones con error < 10%   : 44.6%
+Predicciones con error < 20%   : 73.1%
+Predicciones con error > 50%   : 2.3%
+
+Control — mediana barrio x m2  : 14.2% (y es optimista: se calcula dentro de la misma muestra)
+Mejora del modelo              : 21%
+
+Error por segmento de superficie:
+    segmento         n    error
+    <35            317    10.4%
+    35-50          506     9.7%
+    50-70          252    12.3%
+    70-100         164    15.4%
+    100+           109    17.4%
+
+    El error crece con la superficie. Como las ventas son mas grandes
+    que los alquileres, el error real sobre las ventas es mayor que el
+    global. Por eso se asigna la banda por segmento y no una unica.
+
+Factor de smearing (Duan)      : 1.0193   (residuos out-of-fold)
+
+============================================================================
+EFECTO DE CADA VARIABLE SOBRE EL ALQUILER
+============================================================================
+Lectura: cuanto varia el alquiler esperado, en %, ante la presencia
+de la caracteristica (dummies) o un desvio estandar mas (numericas).
+
+Caracteristicas del inmueble:
+    log_sup                    +  30.5%
+    cochera_txt                +  14.6%
+    ambientes                  +  13.1%
+    amoblado                   +  12.2%
+    pileta                     +   9.0%
+    reciclado                  +   8.5%
+    antiguedad_anios             -5.3%
+    a_reciclar                   -5.1%
+    banos                      +   4.5%
+    tipo_familia_departamento    -3.5%
+    aire_acondicionado         +   3.3%
+    tipo_familia_casa          +   3.3%
+    seguridad                  +   2.7%
+    amenities                  +   2.0%
+    luminoso                   +   1.6%
+    ascensor                     -0.9%
+    parrilla                   +   0.8%
+    dormitorios                +   0.6%
+
+Barrios que mas suman (vs. el promedio):
+    puerto madero              +  48.2%
+    palermo                    +  16.8%
+    belgrano                   +  16.1%
+    nunez                      +  14.0%
+    colegiales                 +  13.4%
+    recoleta                   +  13.0%
+    villa crespo               +   7.7%
+    villa devoto               +   7.1%
+
+Barrios que mas restan:
+    mataderos                     -8.5%
+    liniers                       -8.6%
+    parque patricios              -9.3%
+    villa santa rita              -9.3%
+    la paternal                   -9.7%
+    velez sarsfield              -12.0%
+    infrequent_sklearn           -13.1%
+    floresta                     -15.6%
+
+============================================================================
+CONTROL: LAS DUMMIES DE REGEX, CONTRA RUIDO
+============================================================================
+configuracion                                R2 fuera de muestra
+----------------------------------------------------------------
+dummies de RegEx (las que se usan)                        0.8480
+mismas dummies con los valores permutados                 0.8195
+sin dummies (todas en cero)                               0.8217
+
+Aporte real de las variables de texto : +0.0263 de R2
+Aporte de las mismas columnas al azar : -0.0022 de R2
+
+Lectura: el aporte de las dummies es varias veces mayor que el de
+las mismas columnas sin informacion. La mejora viene del contenido
+del texto, no de haber agregado columnas.
+
+============================================================================
+IMPUTACION DEL ALQUILER ESPERADO A LAS VENTAS
+============================================================================
+Propiedades estimadas          : 10,749
+Con estimacion confiable       : 9,203 (85.6%)
+En barrios con < 10 alquileres  : 1,546
+
+Alquiler estimado — mediana    : USD 757/mes
+Alquiler estimado — rango p5-p95: USD 391 a 2,429
+
+============================================================================
+KPIs DE RENTABILIDAD
+============================================================================
+Vacancia supuesta              : 5.9%
+Gastos del propietario         : 14.0%
+
+Error ponderado sobre las ventas: 13.5%
+    (mayor que el error global de validacion, porque las ventas son
+     mas grandes que los alquileres y ahi el modelo pierde precision)
+
+Rentabilidad bruta — mediana   : 7.01%
+Rentabilidad bruta — p25 a p75 : 5.98% a 8.31%
+Rentabilidad neta — mediana    : 5.67%
+Meses de repago — mediana      : 171 (14.2 años)
+
+Lectura de la incertidumbre:
+    rentabilidad estimada 5%  ->  real entre 4.3% y 5.7%
+    rentabilidad estimada 6%  ->  real entre 5.2% y 6.8%
+    rentabilidad estimada 8%  ->  real entre 6.9% y 9.1%
+
+Sirve para rankear barrios, no para decidir sobre un inmueble puntual.
+
+============================================================================
+RANKING DE BARRIOS POR RENTABILIDAD
+============================================================================
+barrio                   n   venta USD   USD/m2  alq est   bruta   neta
+-----------------------------------------------------------------------
+constitucion           113      65,000    1,129      562  10.10%  8.17%
+san cristobal          227      88,000    1,548      608   8.54%  6.91%
+san telmo              177      95,000    1,721      663   8.36%  6.76%
+balvanera              528      84,950    1,493      579   8.32%  6.74%
+liniers                150     119,500    1,409      759   8.29%  6.71%
+san nicolas            225      85,000    1,616      617   8.29%  6.71%
+barracas               166     110,000    1,533      748   8.23%  6.67%
+monserrat              248      85,250    1,590      580   8.09%  6.55%
+villa luro             140     126,000    1,601      815   8.07%  6.53%
+flores                 488     119,950    1,516      758   8.05%  6.51%
+parque chacabuco       201     130,000    1,583      830   7.87%  6.37%
+floresta               133     107,900    1,401      658   7.86%  6.36%
+villa santa rita       102     127,400    1,681      751   7.72%  6.25%
+villa pueyrredon       110     159,500    1,747      943   7.55%  6.12%
+almagro                537     119,000    1,931      688   7.31%  5.91%
+villa devoto           351     197,000    2,077    1,175   7.31%  5.91%
+villa del parque       274     139,000    1,864      811   7.27%  5.88%
+villa crespo           378     119,250    2,126      692   7.08%  5.73%
+caballito              848     145,000    2,078      811   6.82%  5.52%
+chacarita              106     129,000    2,175      698   6.70%  5.42%
+retiro                 150     105,000    2,076      554   6.58%  5.33%
+saavedra               242     152,100    2,321      823   6.51%  5.28%
+recoleta               571     169,000    2,333      843   6.44%  5.21%
+colegiales             207     169,900    2,500      892   6.37%  5.15%
+nunez                  327     170,000    2,782      841   6.28%  5.08%
+belgrano               565     175,000    2,577      908   6.27%  5.07%
+villa urquiza          438     159,450    2,323      784   6.24%  5.05%
+coghlan                 80     134,870    2,303      669   6.20%  5.02%
+palermo               1102     163,250    2,720      812   6.15%  4.98%
+
+Correlacion de Spearman entre precio/m2 y rentabilidad: -0.903
+-> Relacion inversa fuerte: los barrios caros rinden menos como renta.
+   Esto CONFIRMA la hipotesis planteada en el trabajo.
+
+============================================================================
+MATERIALIZACION DE LOS KPIs SOBRE LA MATRIZ COMPLETA
+============================================================================
+Filas totales                  : 12,097
+Filas con KPI calculado        : 10,749 (88.9%)
+Filas sin KPI                  : 1,348
+
+Por que quedan filas sin KPI:
+    publicadas en alquiler (no tienen precio de venta) : 1,348
+    en venta pero sin superficie o barrio utilizable   : 0
+
+No se imputan: una rentabilidad inventada para una propiedad en
+alquiler no significa nada. El nulo es la respuesta correcta.
+
+Columnas de KPI incorporadas:
+    alquiler_est_usd_mes     mediana     757.02   p5    391.44   p95  2,428.63
+    alquiler_est_m2          mediana      11.70   p5      8.10   p95     16.17
+    n_alq_barrio             mediana      45.00   p5      5.00   p95    254.00
+    estimacion_confiable     mediana       1.00   p5      0.00   p95      1.00
+    rent_bruta_pct           mediana       7.17   p5      4.76   p95     12.25
+    rent_neta_pct            mediana       5.80   p5      3.85   p95      9.91
+    meses_repago             mediana     167.00   p5     98.00   p95    252.00
+    error_estimacion         mediana       0.12   p5      0.10   p95      0.17
+    rent_bruta_min           mediana       6.24   p5      4.10   p95     10.51
+    rent_bruta_max           mediana       8.09   p5      5.40   p95     14.17
+
+============================================================================
+LOS CUATRO KPIs, LEIDOS
+============================================================================
+Base: 9,203 propiedades en venta con estimacion confiable
+
+KPI 1 — Rentabilidad bruta anual
+    mediana 7.01%   |   p25 5.98%   p75 8.31%   |   rango p5-p95 4.73% a 11.36%
+    Cribado: por debajo de 5.98% la unidad rinde menos
+    que tres cuartos de la oferta comparable.
+
+KPI 2 — Rentabilidad neta anual
+    mediana 5.67%   |   p25 4.84%   p75 6.72%
+    La vacancia y los gastos se llevan 19.1% del rendimiento bruto.
+
+KPI 3 — Meses de repago
+    mediana 171 meses (14.2 años)   |   p25 144   p75 201
+    Control de sanidad: 869 unidades repagan en menos de 10 años (9.4%).
+    En este mercado eso es inusual y amerita revisar el aviso.
+
+KPI 4 — Banda de incertidumbre
+    error mediano aplicado : 12.3%
+    ancho mediano de banda : 1.78 puntos porcentuales
+
+    Error por tramo de superficie (por que la banda no es unica):
+        <35      n= 1031   error  10.4%   banda mediana  1.50 pp
+        35-50    n= 2018   error   9.7%   banda mediana  1.34 pp
+        50-70    n= 2046   error  12.3%   banda mediana  1.66 pp
+        70-100   n= 1816   error  15.4%   banda mediana  2.10 pp
+        100+     n= 2292   error  17.4%   banda mediana  2.58 pp
+
+    3,834 propiedades (41.7%) tienen una banda que
+    contiene la mediana del mercado: su diferencia contra el promedio
+    no se distingue del error de estimacion.
+
+============================================================================
+SENSIBILIDAD A LOS SUPUESTOS DE VACANCIA Y GASTOS
+============================================================================
+Base: 9,203 ventas con estimacion confiable; 29 barrios del ranking (30+ ventas)
+Piso del retorno minimo: 7.10% (supuestos.RETORNO_MIN_PISO_PCT)
+
+Rentabilidad neta mediana (%):
+vacancia \ gastos         8%       10%       12%       14%       16%
+               4%       6.19      6.06      5.92      5.79      5.65
+               6%       6.06      5.93      5.80      5.67      5.54
+               8%       5.93      5.80      5.68      5.55      5.42
+              10%       5.80      5.68      5.55      5.43      5.30
+              12%       5.68      5.55      5.43      5.31      5.18
+
+Propiedades con neta >= 7.10% (% de la base):
+vacancia \ gastos         8%       10%       12%       14%       16%
+               4%       29.0      26.3      23.6      21.1      18.7
+               6%       26.5      23.8      21.4      19.0      17.0
+               8%       23.8      21.5      19.1      17.1      15.2
+              10%       21.5      19.3      17.2      15.3      13.6
+              12%       19.1      17.2      15.3      13.7      12.0
+
+Barrios con neta mediana >= 7.10% (de 29):
+vacancia \ gastos         8%       10%       12%       14%       16%
+               4%         10         7         2         1         1
+               6%          7         2         1         1         1
+               8%          2         1         1         1         1
+              10%          1         1         1         1         1
+              12%          1         1         1         1         1
+
+Escenario de supuestos.py (vacancia 5.88%, gastos 14.04%): neta mediana 5.67%, 19.1% de las propiedades y 1 barrios sobre el piso.
+
+Del escenario mas favorable al mas adverso de la grilla, la neta mediana va de 6.19% a 5.18% (1.01 pp).
+Spearman minimo del ranking contra el base: 1.0000; top 5 identico en 25 de 25 escenarios.
+Lectura: los supuestos mueven el NIVEL de la rentabilidad y, con el,
+cuantas unidades superan el retorno minimo; no mueven QUE barrio rinde
+mas. El ranking es robusto a estos supuestos porque se aplican iguales
+a todos. Dejaria de serlo con una vacancia distinta por barrio, que
+este trabajo no mide.
+
+Archivos generados:
+    data/processed\dataset_analitico.csv    (12,097 filas x 98 columnas)
+    data/processed\ranking_barrios.csv
+    data/processed\modelo_alquiler.joblib
+    data/processed\sensibilidad_supuestos.csv
+    data/processed\reporte_kpis.txt

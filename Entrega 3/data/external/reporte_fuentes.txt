@@ -1,0 +1,76 @@
+
+============================================================================
+FUENTES EXTERNAS
+============================================================================
+Fecha: 2026-09-30 11:13
+
+============================================================================
+1. ESTADISTICA CIUDAD — USD/m2 publicado por barrio
+============================================================================
+Cuadros leidos: 6 (1, 2 y 3 ambientes x usado / a estrenar)
+Trimestres conservados: 2024-T3 a 2026-T2
+Barrios de la fuente sin equivalente oficial: ninguno
+Barrios oficiales ausentes de la fuente     : ninguno
+
+Cobertura en 2026-T2 (celdas con dato; IDECBA suprime las de pocos avisos):
+    1 amb estrenar : 21 barrios   total ciudad USD 3,105/m2
+    1 amb usado    : 40 barrios   total ciudad USD 2,561/m2
+    2 amb estrenar : 27 barrios   total ciudad USD 3,215/m2
+    2 amb usado    : 43 barrios   total ciudad USD 2,343/m2
+    3 amb estrenar : 18 barrios   total ciudad USD 3,349/m2
+    3 amb usado    : 45 barrios   total ciudad USD 2,160/m2
+
+============================================================================
+1b. ESTADISTICA CIUDAD — serie del total de la Ciudad
+============================================================================
+Trimestres: 2017-T1 a 2026-T2, 38 por serie como maximo; 228 filas
+
+============================================================================
+2. COLEGIO DE ESCRIBANOS — compraventas e hipotecas por mes
+============================================================================
+Cuadro IDECBA: 288 meses usados (2002-01 a 2025-12)
+Descartados del cuadro por inconsistentes con el Colegio: 7 meses de 2026
+    (el cuadro suma 6,771 compraventas ene-jul 2026; el Colegio informa 35.528)
+Informes del Colegio cargados para 2026: 2026-07, 2026-08
+    2026-07: 6,051 compraventas, 959 con hipoteca (15.8%), promedio USD 116,967
+    2026-08: 6,055 compraventas, 1,059 con hipoteca (17.5%), promedio USD 119,270
+Control: el acumulado ene-ago 2026 que publica el Colegio es 41,583 compraventas y 6,170 hipotecas.
+Año 2025 completo: 69,490 compraventas, 19.1% con hipoteca
+
+============================================================================
+4. CENSO 2022 — departamentos habitados por comuna
+============================================================================
+Comunas: 15; departamentos habitados en la Ciudad: 1,025,296
+Es stock censado, no oferta: sirve para ver que zonas pesan mas o menos
+en la cartera de lo que pesan en la Ciudad, no para medir la oferta.
+
+============================================================================
+5. ESTADISTICA CIUDAD — tiempo medio de publicacion
+============================================================================
+Trimestres: 2013-T4 a 2026-T2; categorias: Total, 1 ambiente, 2 ambientes, 3 ambientes, 4 ambientes, 5 ambientes y más
+Ultimo trimestre, total: 298 dias publicados en promedio
+
+============================================================================
+3. INSIDE AIRBNB — snapshot 2026-06-29
+============================================================================
+Avisos en el snapshot: 29,685
+    unidades enteras (Entire home/apt): 26,790
+    activos (reseña en los ultimos 12 meses): 20,895
+Sin barrio oficial: 0 avisos {}
+Barrios oficiales sin avisos: ['versalles']
+
+Ciudad (activos, unidades enteras): ADR mediano ARS 104,030 (USD 69), ocupacion estimada mediana 21.4%
+Barrios con 30 o mas activos: 30 de 46
+La ocupacion y el ingreso son ESTIMACIONES de Inside Airbnb a partir de
+reseñas, no datos observados de reservas.
+
+============================================================================
+ARCHIVOS
+============================================================================
+    data/external\estadistica_ciudad_m2_barrio.csv    2,352 filas   245.0 KB
+    data/external\estadistica_ciudad_m2_serie.csv       228 filas    19.9 KB
+    data/external\colegio_escribanos_mensual.csv        290 filas    53.1 KB
+    data/external\censo_departamentos_comuna.csv         15 filas     1.0 KB
+    data/external\estadistica_ciudad_tiempo_publicacion.csv    306 filas    23.6 KB
+    data/external\airbnb_barrio.csv                      46 filas     4.2 KB
+    data/external\airbnb_barrio_dormitorios.csv         158 filas    13.9 KB

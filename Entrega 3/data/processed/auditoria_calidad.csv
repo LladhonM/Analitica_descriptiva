@@ -1,0 +1,61 @@
+﻿columna,dtype,n_nulos,pct_nulos,naturaleza,decision
+expensas_sobre_alquiler,float64,10753,88.89,estructural,solo definida para alquileres
+alquiler_usd_mes,float64,10749,88.86,estructural,vacia en ventas por definicion
+alquiler_m2_usd_mes,float64,10749,88.86,estructural,vacia en ventas por definicion
+detalles,str,2173,17.96,informativo,aviso menos detallado -> dummy tiene_detalles
+venta_usd,float64,1348,11.14,estructural,vacia en alquileres por definicion
+venta_m2_usd,float64,1348,11.14,estructural,vacia en alquileres por definicion
+expensas_usd,float64,321,2.65,faltante,imputada por mediana de expensas/m2 del barrio x tipo
+expensas_valor,float64,321,2.65,faltante,"se imputa su version en USD, no el valor en moneda original"
+es_a_estrenar,float64,131,1.08,faltante,se conserva el nulo (no interviene en los KPIs)
+antiguedad_rango,category,131,1.08,faltante,se conserva el nulo (no interviene en los KPIs)
+antiguedad_anios,float64,131,1.08,faltante,imputada por mediana de barrio x tipo
+longitud,float64,7,0.06,faltante,NO se imputa: idem latitud
+ratio_cubierta,float64,7,0.06,faltante,se conserva el nulo (no interviene en los KPIs)
+latitud,float64,7,0.06,faltante,NO se imputa: una coordenada inventada mueve el inmueble de barrio
+ambientes,float64,4,0.03,faltante,imputada por mediana segun rango de superficie
+dormitorios,float64,1,0.01,faltante,imputada por mediana segun rango de superficie
+expensas_moneda,str,1,0.01,faltante,se conserva el nulo (no interviene en los KPIs)
+precio_valor,float64,0,0.0,completa,sin nulos
+fecha_scraping,str,0,0.0,completa,sin nulos
+barrio_raw,str,0,0.0,completa,sin nulos
+barrio,str,0,0.0,completa,sin nulos
+calle,str,0,0.0,completa,sin nulos
+direccion,str,0,0.0,completa,sin nulos
+precio_moneda,str,0,0.0,completa,sin nulos
+tipo_propiedad,str,0,0.0,completa,sin nulos
+operacion,str,0,0.0,completa,sin nulos
+id_aviso,str,0,0.0,completa,sin nulos
+url,str,0,0.0,completa,sin nulos
+descripcion,str,0,0.0,completa,sin nulos
+titulo,str,0,0.0,completa,sin nulos
+precio_m2,float64,0,0.0,completa,sin nulos
+banos,int64,0,0.0,completa,sin nulos
+cocheras,int64,0,0.0,completa,sin nulos
+comuna,int64,0,0.0,completa,sin nulos
+sup_cubierta_m2,float64,0,0.0,completa,sin nulos
+sup_total_m2,float64,0,0.0,completa,sin nulos
+amenities,int64,0,0.0,completa,sin nulos
+pileta,int64,0,0.0,completa,sin nulos
+parrilla,int64,0,0.0,completa,sin nulos
+gimnasio,int64,0,0.0,completa,sin nulos
+sum,int64,0,0.0,completa,sin nulos
+losa_radiante,int64,0,0.0,completa,sin nulos
+aire_acondicionado,int64,0,0.0,completa,sin nulos
+apto_credito,int64,0,0.0,completa,sin nulos
+reciclado,int64,0,0.0,completa,sin nulos
+a_reciclar,int64,0,0.0,completa,sin nulos
+balcon,int64,0,0.0,completa,sin nulos
+luminoso,int64,0,0.0,completa,sin nulos
+seguridad,int64,0,0.0,completa,sin nulos
+baulera,int64,0,0.0,completa,sin nulos
+cochera_txt,int64,0,0.0,completa,sin nulos
+apto_profesional,int64,0,0.0,completa,sin nulos
+profesional_renta,int64,0,0.0,completa,sin nulos
+precio_usd,float64,0,0.0,completa,sin nulos
+patio_jardin,int64,0,0.0,completa,sin nulos
+ascensor,int64,0,0.0,completa,sin nulos
+amoblado,int64,0,0.0,completa,sin nulos
+frente,int64,0,0.0,completa,sin nulos
+tipo_familia,str,0,0.0,completa,sin nulos
+superficie_rango,category,0,0.0,completa,sin nulos

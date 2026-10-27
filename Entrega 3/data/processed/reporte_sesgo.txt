@@ -1,0 +1,81 @@
+
+============================================================================
+SESGO DE LA CARTERA DE RE/MAX
+============================================================================
+Fecha: 2026-09-28 20:47
+
+============================================================================
+1. PRECIO: m2 publicado por RE/MAX contra IDECBA (Argenprop)
+============================================================================
+Referencia: IDECBA 2026-T2; el scraping de RE/MAX es de ago-2026.
+Variacion de IDECBA entre 2026-T1 y 2026-T2 (total ciudad): hasta 0.8% en valor absoluto. Un desfase de un trimestre no explica
+desvios mayores a eso.
+
+Total ciudad (todas las celdas, sin minimo):
+    1 amb estrenar  RE/MAX USD  2,685  IDECBA USD  3,105  desvio  -13.5%  (n=317)
+    2 amb estrenar  RE/MAX USD  2,750  IDECBA USD  3,215  desvio  -14.5%  (n=355)
+    3 amb estrenar  RE/MAX USD  2,803  IDECBA USD  3,349  desvio  -16.3%  (n=207)
+    1 amb usado     RE/MAX USD  2,345  IDECBA USD  2,561  desvio   -8.5%  (n=1,304)
+    2 amb usado     RE/MAX USD  2,201  IDECBA USD  2,343  desvio   -6.1%  (n=2,302)
+    3 amb usado     RE/MAX USD  2,046  IDECBA USD  2,160  desvio   -5.2%  (n=2,413)
+
+Celdas barrio x ambientes x estado con 10+ avisos de RE/MAX y dato de IDECBA: 135
+    desvio mediano               : -9.6%
+    desvio promedio ponderado por cantidad de avisos: -8.0%
+    celdas donde RE/MAX publica mas barato: 127 de 135
+    celdas con desvio mayor a +-10%       : 64 de 135
+
+Barrios mas por debajo y mas por encima del mercado (usados, ponderado por n):
+    coghlan               -17.9%
+    constitucion          -17.4%
+    villa pueyrredon      -16.6%
+    parque chas           -13.3%
+    parque chacabuco      -11.8%
+    ...
+    villa ortuzar          -2.6%
+    san nicolas            -2.4%
+    villa lugano           -0.6%
+    san telmo              +0.9%
+    la boca                +5.0%
+
+Lectura: un desvio negativo significa que la cartera de RE/MAX publica mas
+barato que el promedio de Argenprop en la misma celda. Como el precio esta en
+el denominador del KPI 1, la rentabilidad de la cartera sale MAS ALTA que la
+que daria el mercado publicado. El alquiler estimado tambien sale de avisos de
+RE/MAX, asi que el efecto neto sobre el KPI depende de si su cartera de
+alquiler tiene el mismo sesgo, que no hay fuente oficial para medir.
+
+============================================================================
+2. REPRESENTACION: peso de cada comuna, cartera contra Censo 2022
+============================================================================
+Departamentos de la cartera sin comuna: 0
+comuna  % censo  % venta  indice   % alq  indice
+     1      7.9     10.0    1.28    10.5    1.33
+     2      7.8      6.5    0.83     8.2    1.05
+     3      7.5      7.8    1.04     5.3    0.72
+     4      4.9      2.7    0.56     2.6    0.54
+     5      7.4      6.9    0.93     5.5    0.74
+     6      8.0      8.7    1.09     8.7    1.09
+     7      5.9      5.6    0.94     4.1    0.69
+     8      2.7      1.3    0.47     0.3    0.11
+     9      2.9      1.9    0.68     0.9    0.33
+    10      3.9      3.4    0.88     3.2    0.81
+    11      5.1      6.3    1.22     4.4    0.86
+    12      7.2      7.6    1.06     7.9    1.10
+    13     11.0     11.8    1.08    13.1    1.19
+    14     11.5     11.9    1.04    19.2    1.68
+    15      6.3      7.5    1.19     6.0    0.94
+
+indice = peso en la cartera / peso en el stock censado. 1 = proporcional;
+2 = la comuna pesa el doble en la cartera que en la Ciudad.
+Comunas sobrerrepresentadas en ventas (indice > 1,25): [1]
+Comunas subrepresentadas en ventas (indice < 0,75)   : [4, 8, 9]
+Para replicar la composicion del censo habria que reasignar el 7.2% de
+las ventas de la cartera a otras comunas.
+
+Lectura: el stock censado no es la oferta (en una comuna puede haber mucho
+stock y poca rotacion), asi que el indice mide composicion, no error. Lo que
+importa para generalizar: los promedios de ciudad del trabajo pesan de mas a
+las comunas sobrerrepresentadas. Por eso los KPIs se leen por barrio.
+
+Archivos: data/processed\sesgo_precio_barrio.csv (135 filas), data/processed\sesgo_representacion_comuna.csv (15 filas)

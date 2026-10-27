@@ -1,0 +1,34 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# ---------------------------------------------------------------------------
+# Datos DERIVADOS intermedios: se regeneran corriendo el pipeline.
+#
+#   py src/limpieza.py --tc 1500   -> dataset_limpio, dataset_excluidos
+#   py src/variables.py            -> dataset_variables
+#   py src/kpis.py                 -> dataset_analitico  <- ESTE SI se versiona
+#
+# Los intermedios pesan ~60 MB entre los tres y no se pueden mergear.
+# El dataset_analitico.csv, en cambio, es el entregable: es la matriz final
+# con los KPIs materializados, y la consigna pide que /data/processed exista
+# en el repositorio.
+# ---------------------------------------------------------------------------
+data/processed/dataset_limpio.csv
+data/processed/dataset_variables.csv
+data/processed/dataset_excluidos.csv
+
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+
+# Crudos de fuentes externas: se re-descargan con fuentes_externas.py. Lo que
+# se versiona son las tablas agregadas por barrio de data/external/, que pesan
+# kilobytes y congelan la evidencia con su fecha de descarga (Inside Airbnb
+# reemplaza sus archivos cada trimestre).
+data/external/raw/

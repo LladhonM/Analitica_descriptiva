@@ -440,6 +440,11 @@ MIN_CELDA_TEMPORAL = 20
 # predictoras imputadas; por eso queda como criterio declarado y no como
 # constante.
 
+# Nivel de significacion de los tests formales (notebook 04), fijado antes de
+# correrlos. Con miles de observaciones casi todo efecto lo supera: la
+# decision se lee con el tamanio del efecto, no solo con el p-valor.
+ALFA = 0.05
+
 # Criterio para reemplazar el Ridge por otro modelo (comparacion_modelos.py):
 # tiene que mejorar el R2 fuera de muestra en al menos esto, en TODAS las
 # particiones. Una mejora menor no paga la perdida de coeficientes legibles.

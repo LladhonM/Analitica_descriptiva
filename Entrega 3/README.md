@@ -24,7 +24,8 @@ Sobre esa base ya están hechas:
 - el **ABL segmentado** y los **costos de entrada y refacción**, que cambian el KPI 2 y
   suman la TIR a 5 años (ver [Costos del propietario](#costos-del-propietario-antes-y-después));
 - la **revisión del modelo de alquiler** y la banda cuantílica del KPI 4 (ver
-  [Modelo de alquiler](#modelo-de-alquiler)).
+  [Modelo de alquiler](#modelo-de-alquiler));
+- los **tests formales de H1 a H4** (ver [Hipótesis](#hipótesis-los-tests-formales)).
 
 El dataset con estas columnas es la base del tablero. La revisión del modelo no cambió
 el alquiler estimado, así que los KPIs 1 a 3 quedan fijos; el KPI 4 sí cambió. El resto
@@ -44,7 +45,7 @@ salidas, así que se leen sin ejecutar nada.
 | [`01_accesibilidad`](notebooks/01_accesibilidad.ipynb) | ¿Qué tan conectada está cada propiedad a la red de transporte, y el mercado lo paga en el precio? Capas, medida, cobertura y forma de H2 | 01 a 03 |
 | [`02_costos_del_propietario`](notebooks/02_costos_del_propietario.ipynb) | ¿Cuánto le queda al inversor después de los costos, y le gana a una ON? ABL segmentado, costos de entrada, TIR, refacción y sensibilidad | 04 y 05 |
 | [`03_modelo_alquiler`](notebooks/03_modelo_alquiler.ipynb) | ¿Cuánto se puede confiar en el alquiler estimado? Comparación contra una referencia, qué paga el mercado y la banda del KPI 4 | 06 a 08 |
-| `04_validacion` | Los tests formales de H1 a H4 | por hacer |
+| [`04_validacion`](notebooks/04_validacion.ipynb) | ¿Qué hipótesis se sostienen con un contraste formal, con qué magnitud, y cuáles cambian la decisión? | 09 y 10 |
 | `05_decision` | La función de decisión para P1 a P3 | por hacer |
 
 La limpieza, la minería de texto y el EDA de la 2da entrega no se repiten: están en sus
@@ -70,7 +71,7 @@ fuentes se trajo después, cuando la fusión espacial lo hizo necesario (ver
 | `src/variables.py` | Sin cambios |
 | `src/kpis.py` | Lee `dataset_espacial.csv` (salida de `espacial.py`) en lugar de `dataset_variables.csv`. **El KPI 2 usa el ABL de cada propiedad** (`costos.py`) en lugar de un porcentaje plano; `--gastos` vuelve al plano. Suma costos de entrada, refacción y TIR a 5 años, el antes y el después, y una segunda grilla de sensibilidad (ABL × costos de entrada × vacancia). Calcula la banda cuantílica del KPI 4 y guarda el `.joblib` con metadata: versión de scikit-learn, fecha, hash de los datos de entrenamiento, predictoras y métricas. El modelo de alquiler no cambia. En el docstring, el apartado sobre las dummies de RegEx se atribuye a la 2da entrega |
 | `src/modelo_alquiler.py` | Se quitó el `main()`, un punto de entrada heredado de la 1ra entrega que no usaba nadie: aplicaba vacancia 8% y gastos 12% (no los de `supuestos.py`), escribía archivos que el pipeline no usa y pisaba `ranking_barrios.csv`. El docstring deja de citar un error de ~11,5%, que no es el vigente (11,2%). `calcular_rentabilidad` acepta gastos por propiedad. **El ranking de barrios se ordena por neta y no por bruta**, con desempate por nombre: con el ABL segmentado ya no es lo mismo, y el orden ya no cambia entre corridas. **La banda del KPI 4 es nueva**: regresión cuantílica calibrada por grupo de evidencia (`banda_cuantilica`) en lugar del error mediano del tramo. `entrenar_y_validar` devuelve sus métricas para la metadata del `.joblib`. El Ridge no cambia |
-| `src/supuestos.py` | Se quitaron constantes que ningún script ni notebook leía (`TOP_BARRIOS_HEATMAP` y tres `SCATTER_*`); la fecha de consulta y el umbral de completitud pasan a comentario. Nuevas secciones: radio de caminata y tramos de H2 (4b2), criterio para reemplazar el modelo (`MEJORA_MINIMA_R2`), ABL segmentado (3b2), costos de entrada (3e), refacción (3f) y riesgo legal como limitación (3g). **Se corrigieron dos errores heredados del ABL**: el ejemplo de ARS 43.994 es con coeficiente geográfico 1,75 y no 1,25, y la fuente no dice que una VFH de 15 a 25 millones sea "el rango de un 2 ambientes usado" |
+| `src/supuestos.py` | Se quitaron constantes que ningún script ni notebook leía (`TOP_BARRIOS_HEATMAP` y tres `SCATTER_*`); la fecha de consulta y el umbral de completitud pasan a comentario. Nuevas secciones: radio de caminata y tramos de H2 (4b2), criterio para reemplazar el modelo (`MEJORA_MINIMA_R2`), nivel de significación de los tests (`ALFA`), ABL segmentado (3b2), costos de entrada (3e), refacción (3f) y riesgo legal como limitación (3g). **Se corrigieron dos errores heredados del ABL**: el ejemplo de ARS 43.994 es con coeficiente geográfico 1,75 y no 1,25, y la fuente no dice que una VFH de 15 a 25 millones sea "el rango de un 2 ambientes usado" |
 | `src/eda.py` | Se quitaron un import sin uso (`matplotlib.pyplot`) y un color que no se usaba (`BUENO`) |
 | `src/temporal.py` | Se quitó un import sin uso (`numpy`). `lado_remax()` acepta la ruta del dataset como parámetro. La neta tradicional y los fijos del temporal usan el ABL mediano de cada celda en lugar del plano, para que P3 use los mismos gastos que el KPI 2 |
 | `src/reporte.py` | Se quitó un import sin uso. **Su texto es el informe de la 2da entrega**: se reescribe con los hallazgos de esta, y hasta entonces no forma parte del pipeline |
@@ -129,7 +130,10 @@ y conserva solo los gráficos y hallazgos que cambian la decisión del inversor.
 | `src/test_modelo.py` | 25 tests: la calibración conformal sobre un caso sintético, la metadata del `.joblib` (con su hash contra los datos de entrada) y la coherencia de la banda |
 | `data/processed/comparacion_modelos.csv`, `reporte_comparacion_modelos.txt` | Salida de `comparacion_modelos.py` |
 | `notebooks/01_accesibilidad.ipynb`, `02_costos_del_propietario.ipynb`, `03_modelo_alquiler.ipynb` | Los notebooks de esta entrega (ver [Cómo leer el trabajo](#cómo-leer-el-trabajo-los-notebooks)) |
-| `graficos/01` a `08` | Los gráficos que guardan los notebooks |
+| `src/validacion.py` | Las piezas de los tests formales: Spearman por permutación, Holm, errores agrupados, Van Elteren y la pendiente con efectos fijos de celda con su bootstrap |
+| `src/test_validacion.py` | 19 tests de esas piezas contra oráculos independientes (scipy, la regresión con dummies, HC1), con negativos |
+| `notebooks/04_validacion.ipynb` | Los tests formales de H1 a H4 |
+| `graficos/01` a `10` | Los gráficos que guardan los notebooks |
 | `data/external/transporte_estaciones.csv` | Bocas de subte, estaciones de tren y paradas de Metrobús, con fuente y fecha de descarga |
 | `data/external/espacios_verdes.csv`, `espacios_verdes_vertices.csv` | Plazas y parques, y los vértices de sus polígonos |
 | `data/processed/reporte_espacial.txt` | Log de `espacial.py`: capas, cobertura del dato, distancias, acceso por comuna y heterogeneidad por barrio |
@@ -144,7 +148,7 @@ fecha, en lugar de copiarse.
 | # | Qué se entrega | Origen del pedido | Estado |
 |---|---|---|---|
 | 1 | Fusión espacial: distancia de cada aviso a subte, tren y Metrobús, y una medida de accesibilidad que combine los tres modos. Con eso, H2 deja de ser "no evaluable" | Devolución de la 2da entrega, prioridad 1 | Hecho: capas, medida, cobertura, y magnitud y forma de H2 (ver [H2](#h2-precio-del-m²-y-distancia-a-la-red)). El contraste con p-valor va con los tests de la fila 2 |
-| 2 | Tests formales de H1 a H4, con p-valor, tamaño del efecto, intervalo y lectura de si cambian la decisión | Devolución, prioridad 2 | Pendiente |
+| 2 | Tests formales de H1 a H4, con p-valor, tamaño del efecto, intervalo y lectura de si cambian la decisión | Devolución, prioridad 2 | Hecho (ver [Hipótesis](#hipótesis-los-tests-formales)) |
 | 3 | Función de decisión prescriptiva para P1 (comprar o no), P2 (qué propiedad) y P3 (tradicional o temporal), **implementada y evaluada** | Devolución, prioridad 3; consigna de la 3ra entrega | Pendiente |
 | 4 | ABL segmentado por barrio, superficie y tipo de propiedad, y su efecto sobre la rentabilidad neta | Devolución, prioridad 4 | Hecho (ver [Costos del propietario](#costos-del-propietario-antes-y-después)) |
 | 5 | Costos de entrada, refacción, liquidez y riesgo legal, con fuente y fecha en `supuestos.py` | Devolución, prioridad 5 | Hecho: entrada y refacción con fuente; riesgo legal como limitación declarada. La liquidez sigue siendo la del tiempo de publicación de IDECBA (ficha 5 del catálogo) |
@@ -251,8 +255,9 @@ Las fuentes de cada capa, sus fechas y sus limitaciones están en
 
 `py src/accesibilidad.py` estima la **magnitud y la forma** de la relación con el método
 declarado desde la 1ra entrega: regresión de log(USD/m²) sobre la distancia, **con efectos
-fijos de barrio**. Base: 10.743 avisos de venta. El contraste con p-valor va con los
-tests formales (fila 2 de la tabla de arriba).
+fijos de barrio**. Base: 10.743 avisos de venta. El contraste formal está en la sección
+[Hipótesis](#hipótesis-los-tests-formales): la versión lineal no se sostiene y H2 se
+reformula como un escalón a 1 km.
 
 **Sin el barrio se mide centralidad.** Sin efectos fijos, cada kilómetro hasta la red
 resta 12,9% al m². Con el barrio fijo, la pendiente baja a −6,2% por km, y la distancia
@@ -485,6 +490,34 @@ hash coincida con los alquileres de entrada: si no, el modelo es de otra corrida
 
 ---
 
+## Hipótesis: los tests formales
+
+Los cuatro tests que la 2da entrega dejó declarados, ejecutados en el
+[notebook 04](notebooks/04_validacion.ipynb). Con 9.203 ventas casi cualquier efecto da
+significativo, así que cada test cierra con el p-valor, el tamaño del efecto en
+unidades del inversor, un intervalo del 95% y si cambia la decisión. α = 0,05, fijado
+antes de correrlos (`supuestos.ALFA`).
+
+| Hipótesis | Test | H₀ | Efecto | IC 95% | ¿Cambia la decisión? |
+|---|---|---|---|---|---|
+| **H1** — la rentabilidad cae con el precio del m² del barrio | Spearman unilateral, p por permutación; repetido en 5 tramos de superficie con Holm | Se rechaza (p < 0,001), también en los 5 tramos | −0,98 pp de bruta por cada USD 500/m² del barrio (ρ = −0,90) | [−1,16, −0,81] pp | **Sí**: el barrio es la palanca más fuerte |
+| **H2** — el precio del m² cae con la distancia al transporte | Regresión con efectos fijos de barrio y controles, errores agrupados por barrio | Lineal: **no se rechaza** (p = 0,081). Escalón a 1 km: se rechaza (p = 0,002) | −6,7% del m² a más de 1 km de la red | [−10,9, −2,3]% | Poco: afecta al 6% de los avisos |
+| **H3** — las unidades a reciclar cotizan con descuento | Van Elteren, celdas barrio × superficie | Se rechaza (p < 0,001), en precio y en rentabilidad | −23,3% del m²; +1,12 pp de bruta | [−26,8, −19,2]%; [+0,74, +1,52] pp | Sí, si la refacción es mínima |
+| **H4** — la antigüedad pesa más en venta que en alquiler | Wald sobre dos regresiones con efectos fijos de celda, bootstrap por celdas | Se rechaza (p < 0,001) | −5,7% del m² de venta y −2,6% del alquiler por década: +0,23 pp de bruta por década | +2,4% a +4,3% relativo por década | Poco: menos de 1 pp en 40 años |
+
+**H2 se reformula.** Con los errores agrupados por barrio, la pendiente lineal no es
+significativa; con el error común habría salido muy significativa (t = −4,07 contra
+−1,42). La versión que los datos sostienen es: *dentro del barrio, la distancia a la red
+no cambia el precio del m² hasta 1 km; más allá, el m² vale alrededor de 7% menos.*
+
+**Supuestos verificados.** Los precios tienen cola derecha larga, así que H1 y H3 usan
+tests de rangos y H2 y H4 trabajan sobre el logaritmo. Los errores de H2 se agrupan por
+barrio y el bootstrap de H4 remuestrea celdas: los avisos de un mismo barrio o celda no
+son independientes. H4 usa solo antigüedad observada. Las piezas estadísticas están en
+`src/validacion.py` y se verifican contra scipy en `src/test_validacion.py`.
+
+---
+
 ## Reproducir
 
 Python 3.13. Desde esta carpeta:
@@ -507,6 +540,7 @@ py src/test_espacial.py                  # fusión espacial, sin red
 py src/test_costos.py                    # ABL, costos de entrada y TIR
 py src/test_accesibilidad.py             # método de H2, sobre datos sintéticos
 py src/test_modelo.py                    # banda cuantílica y metadata del modelo
+py src/test_validacion.py                # piezas de los tests formales, sin datos
 ```
 
 Los siete primeros scripts reconstruyen `data/processed/` a partir de
@@ -520,6 +554,7 @@ cd notebooks
 py -m nbconvert --to notebook --execute --inplace 01_accesibilidad.ipynb
 py -m nbconvert --to notebook --execute --inplace 02_costos_del_propietario.ipynb
 py -m nbconvert --to notebook --execute --inplace 03_modelo_alquiler.ipynb
+py -m nbconvert --to notebook --execute --inplace 04_validacion.ipynb   # unos 2 minutos
 ```
 
 Los notebooks necesitan `dataset_espacial.csv` (el 03 lee de ahí los alquileres para la
@@ -559,8 +594,8 @@ Entrega 3/
 │   ├── external/       tablas fechadas de las fuentes externas y capas espaciales
 │   └── reference/      ranking de barrios de la 1ra entrega, para comparar
 ├── informe/            FUENTES_EXTERNAS.md
-├── notebooks/          01 accesibilidad, 02 costos, 03 modelo (en orden de lectura)
-├── graficos/           los 8 gráficos que guardan los notebooks
+├── notebooks/          01 accesibilidad, 02 costos, 03 modelo, 04 validación (en orden de lectura)
+├── graficos/           los 10 gráficos que guardan los notebooks
 ├── src/                pipeline, supuestos y tests
 ├── requirements.txt
 └── README.md

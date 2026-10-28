@@ -444,6 +444,13 @@ solo si mejora el R² en 0,01 en todas las semillas. **El Ridge se queda, y el a
 estimado y los KPIs 1 a 3 no cambian.** Sus coeficientes se leen como cuánto paga el
 mercado por cada característica, y esa lectura es parte del producto para el inversor.
 
+**Las variables espaciales.** Son las seis distancias de `espacial.py`: al subte, al
+tren, al Metrobús, a la red más cercana de las tres, y a la plaza y al parque más
+cercanos. Se probaron solo en la variante "Ridge + espaciales": el modelo vigente nunca
+las incluyó y sigue con las 21 predictoras de la 2da entrega. No se eliminaron del
+trabajo: siguen como columnas del dataset, se usan para H2 y quedan disponibles para el
+tablero.
+
 ### La banda del KPI 4
 
 Hasta la 2da entrega, la banda de cada propiedad era su estimación más y menos el error

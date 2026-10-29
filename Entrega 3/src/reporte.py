@@ -8,20 +8,20 @@ Un informe tipeado se desincroniza del dataset la primera vez que alguien
 reejecuta el pipeline, y nadie se entera. Aca cada numero del texto sale de un
 f-string alimentado por los datos: si cambia un supuesto o se corrige la
 limpieza, el informe se regenera con los numeros nuevos. Las cifras narradas
-coinciden con las calculadas por construccion.
+coinciden con las calculadas por construccion. Hasta los titulos dependen del
+dato, para que no puedan afirmar lo contrario de lo que muestra la tabla.
 
-Los calculos usan las mismas funciones de eda.py y los mismos umbrales de
-supuestos.py que el notebook 03, para que el informe y el notebook digan lo
-mismo.
+QUE CAMBIA EN LA 3RA ENTREGA
+----------------------------
+Los hallazgos se ordenan por cuanto cambian la decision del inversor, y solo
+quedan los que la cambian (prioridad 7 de la devolucion). Se suman la
+funcion de decision, los costos de entrada, la comparacion de modelos, los
+cuatro tests formales, los micro-mercados y la accesibilidad. Los tests se
+recalculan con validacion.resumen_hipotesis, que usa los procedimientos y
+las semillas del notebook 04.
 
 Uso:
-    py src/reporte.py      (despues de kpis.py, fuentes_externas.py, temporal.py y sesgo.py)
-
-Entradas:
-    data/processed/dataset_analitico.csv, sensibilidad_supuestos.csv,
-    temporal_vs_tradicional.csv, sesgo_precio_barrio.csv,
-    sesgo_representacion_comuna.csv
-    data/external/colegio_escribanos_mensual.csv
+    py src/reporte.py      (al final del pipeline: despues de decision.py y sesgo.py)
 
 Salida:
     informe/INFORME_HALLAZGOS.md
@@ -33,18 +33,23 @@ import os
 import sys
 from datetime import datetime
 
+import joblib
 import numpy as np
 import pandas as pd
 
+import costos as C
+import decision as D
 import eda
+import sintesis as SI
 import supuestos as S
+import validacion as V
 
 
 P = "data/processed"
 E = "data/external"
 SALIDA = "informe/INFORME_HALLAZGOS.md"
+G = "../graficos"            # los graficos, vistos desde informe/
 ESTRATO = ["barrio", "superficie_rango"]
-ESTRATO_T = ESTRATO + ["tipo_propiedad"]
 
 
 # --------------------------------------------------------------------------
@@ -68,8 +73,12 @@ def usd(x: float) -> str:
     return "USD " + num(x, 0)
 
 
-def rho(x: float) -> str:
-    return num(x, 3)
+def ic(par, d: int = 1, unidad: str = "") -> str:
+    return f"[{num(par[0], d)}{unidad}, {num(par[1], d)}{unidad}]"
+
+
+def pval(p: float) -> str:
+    return "< 0,001" if p < 0.001 else num(p, 3)
 
 
 def lista(items) -> str:
@@ -90,6 +99,10 @@ def fecha(iso: str) -> str:
     return datetime.strptime(iso[:10], "%Y-%m-%d").strftime("%d-%m-%Y")
 
 
+def grafico(n: int, nombre: str, alt: str) -> str:
+    return f"![{alt}]({G}/{n:02d}_{nombre}.png)"
+
+
 # --------------------------------------------------------------------------
 # Calculos
 # --------------------------------------------------------------------------
@@ -101,176 +114,136 @@ def leer(nombre: str, carpeta: str = P) -> pd.DataFrame:
 def calcular() -> dict:
     """Todos los numeros del informe, en un solo lugar."""
     df = leer("dataset_analitico.csv")
-    ventas_kpi = df[(df.operacion == "venta") & df.rent_bruta_pct.notna()]
-    ok = ventas_kpi[ventas_kpi.estimacion_confiable == 1]
-    sens = leer("sensibilidad_supuestos.csv")
-    tv = leer("temporal_vs_tradicional.csv")
-    sp = leer("sesgo_precio_barrio.csv")
-    sr = leer("sesgo_representacion_comuna.csv")
-    col = leer("colegio_escribanos_mensual.csv", E)
-    tpub = leer("estadistica_ciudad_tiempo_publicacion.csv", E)
-
-    r = {"n_ok": len(ok), "n_kpi": len(ventas_kpi),
+    for c in ["en_presupuesto", "en_soporte_modelo", "universo_decision", "p1_comprar",
+              "p1_comprar_con_entrada", "p2_no_dominada"]:
+        df[c] = df[c].fillna(False).astype(bool)
+    ok = df[(df.operacion == "venta") & (df.estimacion_confiable == 1) & df.rent_bruta_pct.notna()]
+    u = df[df.universo_decision]
+    piso, techo = S.RETORNO_MINIMO_BANDA
+    r = {"n_ok": len(ok), "n_u": len(u), "piso": piso, "techo": techo,
          "fecha_scraping": fecha(str(df.fecha_scraping.min())),
          "fecha_scraping_fin": fecha(str(df.fecha_scraping.max()))}
-    piso, techo = S.RETORNO_MINIMO_BANDA
-    r.update(piso=piso, techo=techo, soberano=S.RETORNO_SOBERANO_REF_PCT)
 
-    # --- 1. Ladrillo contra renta fija --------------------------------------
-    factor = (1 - S.VACANCIA_PCT / 100) * (1 - S.GASTOS_PCT / 100)
-    alc = ok[ok.venta_usd.between(*S.PRESUPUESTO_USD)]
-    optimista = ok.rent_bruta_max * factor
+    # --- 1. Comprar o no (P1) --------------------------------------------------
+    sens_d = leer("decision_sensibilidad.csv")
+    pres = ok[ok.en_presupuesto]
     r.update(
-        bruta_med=ok.rent_bruta_pct.median(), neta_med=ok.rent_neta_pct.median(),
+        neta_med=ok.rent_neta_pct.median(), bruta_med=ok.rent_bruta_pct.median(),
+        tir_med=ok.tir_5a_pct.median(), brecha_piso=piso - ok.rent_neta_pct.median(),
         neta_sobre_piso=(ok.rent_neta_pct >= piso).mean() * 100,
-        neta_sobre_techo=(ok.rent_neta_pct >= techo).mean() * 100,
-        bruta_sobre_piso=(ok.rent_bruta_pct >= piso).mean() * 100,
-        neta_alc_med=alc.rent_neta_pct.median(),
-        neta_alc_sobre_piso=(alc.rent_neta_pct >= piso).mean() * 100,
-        optimista_sobre_piso=(optimista >= piso).mean() * 100,
-        pct_en_presupuesto=len(alc) / len(ok) * 100,
-        vacancia=S.VACANCIA_PCT, gastos=S.GASTOS_PCT,
-        se_lleva=(1 - factor) * 100,
-        brecha_piso=piso - ok.rent_neta_pct.median(),
-        repago_med=ok.meses_repago.median(),
-        horizonte=S.HORIZONTE_ANIOS,
-        recupero_horizonte=S.HORIZONTE_ANIOS * 12 / ok.meses_repago.median() * 100,
-        sens_neta_min=sens.neta_mediana.min(), sens_neta_max=sens.neta_mediana.max(),
-        sens_barrios_min=int(sens.barrios_sobre_piso.min()),
-        sens_barrios_max=int(sens.barrios_sobre_piso.max()),
-        sens_spearman_min=sens.spearman_ranking_vs_base.min(),
-        sens_vac_min=sens.vacancia_pct.min(), sens_vac_max=sens.vacancia_pct.max(),
-        sens_gas_min=sens.gastos_pct.min(), sens_gas_max=sens.gastos_pct.max(),
+        n_pres=len(pres), n_fuera_soporte=int((pres.en_presupuesto & ~pres.en_soporte_modelo).sum()),
+        fuera_tipos=pres.loc[~pres.en_soporte_modelo, "tipo_familia"].value_counts().to_dict(),
+        alq_casa=int(((df.operacion == "alquiler") & (df.tipo_familia == "casa")).sum()),
+        alq_ph=int(((df.operacion == "alquiler") & (df.tipo_familia == "ph")).sum()),
+        alq_depto=int(((df.operacion == "alquiler") & (df.tipo_familia == "departamento")).sum()),
+        neta_min_med=u.neta_min_pct.median(), neta_u_med=u.rent_neta_pct.median(),
+        n_p1=int(u.p1_comprar.sum()), n_p1e=int(u.p1_comprar_con_entrada.sum()),
+        p1_central=int((u.rent_neta_pct > techo).sum()),
+        p1_rel_m2=u.loc[u.p1_comprar, "m2_relativo_celda"].median(),
+        sens_p1_min=int(sens_d.n_p1.min()), sens_p1_max=int(sens_d.n_p1.max()),
+        sens_p1e_max_con=int(sens_d.loc[sens_d.entrada != "sin", "n_p1_con_entrada"].max()),
+        sens_p1_margen1=int(sens_d.loc[(sens_d.parametro == "margen por liquidez") & (sens_d.margen == 1.0), "n_p1"].iloc[0]),
+        sens_p1_piso=int(sens_d.loc[(sens_d.parametro == "banda de retorno") & (sens_d.umbral == piso), "n_p1"].iloc[0]),
+        repago_med=ok.meses_repago.median(), horizonte=S.HORIZONTE_ANIOS,
     )
-    rank = ok.groupby("barrio").agg(n=("rent_neta_pct", "size"), neta=("rent_neta_pct", "median"))
-    rank = rank[rank.n >= S.MIN_VENTAS_BARRIO]
-    r.update(n_barrios=len(rank), barrios_sobre_piso=int((rank.neta >= piso).sum()),
-             barrios_sobre_piso_lista=", ".join(
-                 eda.nombres_barrio(rank[rank.neta >= piso].index)) or "ninguno")
+    r["recupero_horizonte"] = S.HORIZONTE_ANIOS * 12 / r["repago_med"] * 100
 
-    # --- 2. Temporal -------------------------------------------------------
-    r.update(tv_celdas=len(tv), tv_gana_base=int(tv.gana_temporal_base.sum()),
-             tv_gana_ref=int(tv.gana_temporal_ref.sum()), ocup_ref=S.OCUPACION_REF_PCT,
-             tv_equil_med=tv.ocupacion_equilibrio_pct.median(),
-             tv_equil_min=tv.ocupacion_equilibrio_pct.min(),
-             tv_equil_auto=tv.ocupacion_equilibrio_auto_pct.median(),
-             tv_ocup_med=tv.ocupacion_mediana_pct.median(),
-             tv_neta_base_med=tv.temp_neta_pct.median(), tv_neta_ref_med=tv.temp_neta_ref_pct.median())
+    # --- 2. Costos de entrada y ABL ----------------------------------------------
+    ad = leer("antes_despues_kpis.csv").set_index("escenario")
+    q = pd.qcut(ok.alquiler_est_usd_mes * 12 / ok.venta_usd, 5, labels=False)
+    abl_q = ok.groupby(q).abl_pct.median()
+    r.update(neta_antes=ad.iloc[0].mediana_pct, neta_segm=ad.iloc[1].mediana_pct, tir_ad=ad.iloc[2].mediana_pct,
+             barrios_antes=int(ad.iloc[0].barrios_sobre_piso), barrios_tir=int(ad.iloc[2].barrios_sobre_piso),
+             entrada_med=ok.costos_entrada_pct.median(), abl_plano=S.ABL_PCT,
+             abl_q1=abl_q.iloc[0], abl_q5=abl_q.iloc[-1],
+             brecha_tir=piso - ok.tir_5a_pct.median())
+    # Refaccion contra el descuento de H3 (notebook 02).
+    ventas_all = df[(df.operacion == "venta") & df.venta_m2_usd.notna()]
+    t3 = eda.efecto_estratificado(ventas_all, "a_reciclar", "venta_m2_usd", ESTRATO, S.MIN_GRUPO_ESTRATO)
+    d = -eda.mediana_ponderada(t3.diferencia / t3.mediana_0, t3.peso)
+    umbral = d / (1 - d) * 100
+    rec = ok[ok.a_reciclar == 1]
+    for esc, clave in [("base", "ref_min"), ("alto", "ref_int")]:
+        c = C.refaccion_usd(rec, esc) / rec.venta_usd * 100
+        r[clave], r[f"{clave}_cubre"] = c.median(), (c < umbral).mean() * 100
+    r["ref_umbral"] = umbral
 
-    # --- 3. Sesgo ---------------------------------------------------------
-    usados, nuevos = sp[sp.estado == "usado"], sp[sp.estado == "estrenar"]
+    # --- 3. Que propiedad (P2) y el modelo --------------------------------------------
+    lo, hi = u.neta_min_pct, u.neta_max_pct
+    front = u[u.p2_no_dominada]
+    cm = leer("comparacion_modelos.csv").groupby("modelo")[["r2_log", "error_mediano_pct"]].mean()
+    cb = leer("cobertura_banda.csv").set_index("banda").cobertura
+    r.update(pares=D.pares_distinguibles(lo, hi) * 100,
+             pares_tramo=D.pares_distinguibles_por_grupo(lo, hi, u.superficie_rango) * 100,
+             pares_barrio=D.pares_distinguibles_por_grupo(lo, hi, u.barrio) * 100, n_front=len(front),
+             ancho_u=(hi - lo).median(), ancho_front=(front.neta_max_pct - front.neta_min_pct).median(),
+             front_barrios=eda.nombres_barrio(front.barrio.value_counts().index[:3]),
+             r2_ridge=cm.loc["ridge", "r2_log"], r2_ref=cm.loc["mediana barrio x tramo", "r2_log"],
+             err_ridge=cm.loc["ridge", "error_mediano_pct"], err_ref=cm.loc["mediana barrio x tramo", "error_mediano_pct"],
+             r2_mejor_alt=cm.drop(index=["ridge", "mediana barrio x tramo"]).r2_log.max(),
+             cob_antes=cb["anterior"] * 100, cob_ahora=cb["vigente"] * 100,
+             sens_pares_min=sens_d.pares_distinguibles_pct.min(), sens_pares_max=sens_d.pares_distinguibles_pct.max())
+    liq = leer("estadistica_ciudad_tiempo_publicacion.csv", E)
+    liq = liq[liq.trimestre == liq.trimestre.max()].set_index("ambientes").dias
+    r.update(liq_14_min=liq.drop(index=["Total", "5 ambientes y más"]).min(),
+             liq_14_max=liq.drop(index=["Total", "5 ambientes y más"]).max(), liq_5=liq["5 ambientes y más"])
+
+    # --- 4. Que rinde mas: tests formales y micro-mercados --------------------------------
+    r.update(V.resumen_hipotesis(df))
+    mc = SI.mca(SI.tabla_mca(df))
+    df = df.copy()   # tras sumar columnas de a una, pandas avisa que el frame esta fragmentado
+    df["grupo"] = SI.micromercados(mc["filas"])
+    df["micromercado"] = df.grupo.map(SI.nombrar(df))
+    ref = "departamento estandar"
+    pv = SI.prima_en_celda(df[df.operacion == "venta"], "venta_m2_usd", "micromercado", ref)
+    pa = SI.prima_en_celda(df[df.operacion == "alquiler"], "alquiler_m2_usd_mes", "micromercado", ref)
+    torre = "torre con amenities"
+    rel = (1 + pa.loc[torre, "prima_pct"] / 100) / (1 + pv.loc[torre, "prima_pct"] / 100) - 1
+    r.update(mm_venta=pv.loc[torre, "prima_pct"], mm_venta_ic=(pv.loc[torre, "ic_inf"], pv.loc[torre, "ic_sup"]),
+             mm_alq=pa.loc[torre, "prima_pct"], mm_alq_ic=(pa.loc[torre, "ic_inf"], pa.loc[torre, "ic_sup"]),
+             mm_pp=rel * ok.rent_bruta_pct.median(), mm_share=(df.micromercado == torre).mean() * 100)
+
+    # --- 5. Temporal (P3) ------------------------------------------------------------------
+    tv = leer("temporal_vs_tradicional.csv")
+    p3 = leer("decision_p3.csv")
+    p3b = p3[p3.vacancia_tradicional_pct == S.VACANCIA_PCT].set_index(["gestion", "ocupacion_sostenible_pct"]).gana_temporal
+    r.update(tv_celdas=len(tv), tv_equil_med=tv.ocupacion_equilibrio_pct.median(),
+             tv_equil_auto=tv.ocupacion_equilibrio_auto_pct.median(), tv_ocup_med=tv.ocupacion_mediana_pct.median(),
+             tv_gana_base=int(tv.gana_temporal_base.sum()), ocup_ref=S.OCUPACION_REF_PCT,
+             tv_gana_ref=int(p3b[("tercerizada", S.OCUPACION_REF_PCT)]),
+             tv_gana_ref_auto=int(p3b[("autogestionado", S.OCUPACION_REF_PCT)]))
+
+    # --- 6. Sesgo de la cartera -----------------------------------------------------------
+    sp, sr = leer("sesgo_precio_barrio.csv"), leer("sesgo_representacion_comuna.csv")
     r.update(sp_celdas=len(sp), sp_barato=(sp.desvio_pct < 0).mean() * 100,
-             sp_med=sp.desvio_pct.median(), sp_med_usado=usados.desvio_pct.median(),
-             sp_med_nuevo=nuevos.desvio_pct.median(),
              sp_pond=np.average(sp.desvio_pct, weights=sp.n_remax),
-             sr_reasignar=(sr.pct_cartera_venta - sr.pct_departamentos_ciudad).abs().sum() / 2,
+             sp_med_usado=sp[sp.estado == "usado"].desvio_pct.median(),
+             sp_med_nuevo=sp[sp.estado == "estrenar"].desvio_pct.median(),
              sr_sobre=sr.loc[sr.indice_venta > 1.25, "comuna"].tolist(),
              sr_sub=sr.loc[sr.indice_venta < 0.75, "comuna"].tolist(),
-             sr_min=sr.indice_venta.min(), sr_max=sr.indice_venta.max())
-    # Si se comprara al precio publicado promedio del mercado y no al de la
-    # cartera, la renta bajaria en proporcion al desvio (el precio divide).
+             sr_reasignar=(sr.pct_cartera_venta - sr.pct_departamentos_ciudad).abs().sum() / 2)
     r["neta_a_precio_mercado"] = r["neta_med"] * (1 + r["sp_pond"] / 100)
 
-    # --- 4. Dispersion intra contra entre -----------------------------------
-    b = eda.por_barrio(ok, "rent_bruta_pct", minimo=S.MIN_VENTAS_BARRIO)
-    b["venta_m2"] = ok.groupby("barrio").venta_m2_usd.median().reindex(b.index)
-    ratios = []
-    for tramo in S.ORDEN_SUPERFICIE_RANGO:
-        sub = ok[ok.superficie_rango == tramo]
-        n = sub.groupby("barrio").size()
-        validos = n[n >= S.MIN_VENTAS_BARRIO].index
-        if len(validos) < 2:
-            continue
-        g = sub[sub.barrio.isin(validos)].groupby("barrio").rent_bruta_pct
-        iqr = g.quantile(.75) - g.quantile(.25)
-        ratios.append(iqr.max() / (g.median().max() - g.median().min()))
-    med_mkt = ok.rent_bruta_pct.median()
-    r.update(entre=b.mediana.max() - b.mediana.min(),
-             barrio_alto=eda.nombre_barrio(b.mediana.idxmax()),
-             barrio_bajo=eda.nombre_barrio(b.mediana.idxmin()),
-             iqr_max=b.IQR.max(), iqr_max_barrio=eda.nombre_barrio(b.IQR.idxmax()),
-             iqr_med=b.IQR.median(), ratio_tramo_min=min(ratios), ratio_tramo_max=max(ratios),
-             solapan=((ok.rent_bruta_min <= med_mkt) & (ok.rent_bruta_max >= med_mkt)).mean() * 100,
-             err_med=ok.error_estimacion.median() * 100)
+    # --- 7. Accesibilidad (H2) --------------------------------------------------------------
+    geo = df[df.dist_transporte_m.notna()]
+    radio = S.RADIO_CAMINATA_M
+    por_comuna = geo.groupby("comuna").agg(subte=("dist_subte_m", lambda s: (s <= radio).mean() * 100),
+                                          red=("dist_transporte_m", lambda s: (s <= radio).mean() * 100))
+    r.update(radio=radio, acc_subte=(geo.dist_subte_m <= radio).mean() * 100,
+             acc_red=(geo.dist_transporte_m <= radio).mean() * 100,
+             comunas_sin_subte=[int(c) for c in por_comuna.index[por_comuna.subte == 0]],
+             red_sin_subte_min=por_comuna.loc[por_comuna.subte == 0, "red"].min(),
+             red_sin_subte_max=por_comuna.loc[por_comuna.subte == 0, "red"].max())
 
-    # --- 5. Que comprar ---------------------------------------------------
-    r["h1_rho"] = b.venta_m2.corr(b.mediana, method="spearman")
-    rh = []
-    for tramo in S.ORDEN_SUPERFICIE_RANGO:
-        sub = ok[ok.superficie_rango == tramo]
-        g = sub.groupby("barrio").agg(n=("rent_bruta_pct", "size"), m2=("venta_m2_usd", "median"),
-                                      renta=("rent_bruta_pct", "median"))
-        g = g[g.n >= S.MIN_AVISOS_CELDA]
-        if len(g) >= 5:
-            rh.append(g.m2.corr(g.renta, method="spearman"))
-    r.update(h1_tramo_min=min(rh), h1_tramo_max=max(rh), h1_tramos=len(rh))
-    g_tp = leer("../reference/ranking_barrios_entrega1.csv")
-    r["h1_rho_e1"] = g_tp.venta_m2.corr(g_tp.rent_bruta, method="spearman")
-
-    r["am_ingenua"] = (ok.loc[ok.amenities == 1, "rent_bruta_pct"].median()
-                       - ok.loc[ok.amenities == 0, "rent_bruta_pct"].median())
-    t_am = eda.efecto_estratificado(ok, "amenities", "rent_bruta_pct", ESTRATO, S.MIN_GRUPO_ESTRATO)
-    t_amt = eda.efecto_estratificado(ok, "amenities", "rent_bruta_pct", ESTRATO_T, S.MIN_GRUPO_ESTRATO)
-    ra, rat = eda.resumir_efecto(t_am, len(ok)), eda.resumir_efecto(t_amt, len(ok))
-    r.update(am_estrato=ra["mediana_ponderada"], am_estrato_t=rat["mediana_ponderada"],
-             am_celdas=ra["celdas"], am_neg=ra["pct_celdas_negativas"])
-    for resp, clave in [("venta_m2_usd", "am_prima_precio"), ("alquiler_est_m2", "am_prima_alq")]:
-        t = eda.efecto_estratificado(ok, "amenities", resp, ESTRATO, S.MIN_GRUPO_ESTRATO)
-        r[clave] = eda.mediana_ponderada(t.diferencia / t.mediana_0 * 100, t.peso)
-
-    deptos = ok[ok.tipo_familia == "departamento"]
-    orden = S.ORDEN_SUPERFICIE_RANGO
-    chico, grande = orden[0], orden[3]
-    filas = []
-    for _, g in deptos.groupby("barrio"):
-        a_ = g.loc[g.superficie_rango == chico, "rent_bruta_pct"]
-        z_ = g.loc[g.superficie_rango == grande, "rent_bruta_pct"]
-        if len(a_) >= S.MIN_GRUPO_ESTRATO and len(z_) >= S.MIN_GRUPO_ESTRATO:
-            filas.append((a_.median() - z_.median(), min(len(a_), len(z_))))
-    ctl = pd.DataFrame(filas, columns=["dif", "peso"])
-    r.update(tam_chico=chico, tam_grande=grande, tam_barrios=len(ctl),
-             tam_dif=eda.mediana_ponderada(ctl.dif, ctl.peso), tam_pct=(ctl.dif > 0).mean() * 100)
-
-    ventas_all = df[(df.operacion == "venta") & df.venta_m2_usd.notna()]
-    t3p = eda.efecto_estratificado(ventas_all, "a_reciclar", "venta_m2_usd", ESTRATO, S.MIN_GRUPO_ESTRATO)
-    t3r = eda.efecto_estratificado(ok, "a_reciclar", "rent_bruta_pct", ESTRATO, S.MIN_GRUPO_ESTRATO)
-    r.update(h3_desc=eda.mediana_ponderada(t3p.diferencia / t3p.mediana_0 * 100, t3p.peso),
-             h3_celdas=len(t3p), h3_neg=(t3p.diferencia < 0).mean() * 100,
-             h3_renta=eda.resumir_efecto(t3r, len(ok))["mediana_ponderada"], h3_celdas_r=len(t3r))
-
-    def spearman_estrato(base, y, minimo):
-        base = base[(base.antiguedad_anios_imputada == 0) & base[y].notna()]
-        rs, ns = [], []
-        for _, g in base.groupby(ESTRATO, observed=True):
-            if len(g) >= minimo and g.antiguedad_anios.nunique() > 1:
-                rs.append(g.antiguedad_anios.corr(g[y], method="spearman")); ns.append(len(g))
-        return eda.mediana_ponderada(rs, ns), len(rs)
-    r["h4_venta"], r["h4_celdas_v"] = spearman_estrato(df[df.operacion == "venta"], "venta_m2_usd",
-                                                       S.MIN_CELDA_CORRELACION)
-    r["h4_alq"], r["h4_celdas_a"] = spearman_estrato(df[df.operacion == "alquiler"],
-                                                     "alquiler_m2_usd_mes", S.MIN_AVISOS_CELDA)
-
-    # --- Liquidez: tiempo medio de publicacion (IDECBA, toda la Ciudad) -----
-    ult_t = tpub.trimestre.max()
+    # --- Contexto de liquidez y credito -------------------------------------------------------
+    tpub = leer("estadistica_ciudad_tiempo_publicacion.csv", E)
     tot = tpub[tpub.ambientes == "Total"].set_index("trimestre").dias
-    r.update(liq_trim=ult_t, liq_dias=float(tot[ult_t]), liq_meses=float(tot[ult_t]) / 30.4,
-             liq_max=float(tot.max()), liq_max_trim=tot.idxmax())
-
-    # --- Zonas: el mapa del notebook 03 en numeros -------------------------
-    zonas = {"norte": [2, 13, 14], "centro": [1, 3, 5, 6, 15],
-             "sur y oeste": [4, 7, 8, 9, 10, 11, 12]}
-    r["zona_norte_comunas"] = zonas["norte"]
-    for zona, comunas in zonas.items():
-        z = ok[ok.comuna.isin(comunas)]
-        r[f"zona_{zona}_piso"] = (z.rent_neta_pct >= piso).mean() * 100
-        r[f"zona_{zona}_pct"] = len(z) / len(ok) * 100
-
-    # --- Contexto de mercado ------------------------------------------------
-    ult = col.dropna(subset=["monto_promedio_usd"]).iloc[-1]
+    col = leer("colegio_escribanos_mensual.csv", E)
     a25 = col[col.mes.str.startswith("2025")]
-    r.update(escritura=float(ult.monto_promedio_usd), escritura_mes=ult.mes,
-             hip_2025=a25.hipotecas.sum() / a25.compraventas.sum() * 100,
-             venta_med=ok.venta_usd.median())
+    r.update(liq_trim=tpub.trimestre.max(), liq_dias=float(tot[tpub.trimestre.max()]),
+             hip_2025=a25.hipotecas.sum() / a25.compraventas.sum() * 100)
+    r["liq_meses"] = r["liq_dias"] / 30.4
+    r["r2_modelo"] = joblib.load(os.path.join(P, "modelo_alquiler.joblib"))["metadata"]["metricas_validacion"]["r2_log"]
     return r
 
 
@@ -281,240 +254,290 @@ def calcular() -> dict:
 def informe(r: dict) -> str:
     L = []
     w = L.append
-    w("# Informe de hallazgos — 2da pre-entrega")
+    w("# Informe de hallazgos — 3ra pre-entrega")
     w("")
     w("**TP Integrador · 82.04 Analítica Descriptiva (ITBA) · Grupo 2**")
     w("")
-    w(f"*Generado por `py src/reporte.py` el {datetime.now():%d-%m-%Y}. Cada cifra de este documento "
-      f"se calcula al generarlo a partir de `data/processed/` y `data/external/`: si se reejecuta el "
-      f"pipeline, el informe se regenera con los números nuevos.*")
+    w(f"*Generado por `py src/reporte.py` el {datetime.now():%d-%m-%Y}. Cada cifra de este documento se calcula "
+      f"al generarlo a partir de `data/processed/` y `data/external/`: si se reejecuta el pipeline, el informe "
+      f"se regenera con los números nuevos.*")
     w("")
-    w("**Cliente:** un pequeño inversor con ahorros en dólares que compra **una sola unidad** en CABA "
-      f"para alquilarla, con un presupuesto de {usd(S.PRESUPUESTO_MIN_USD)} a {usd(S.PRESUPUESTO_MAX_USD)}. "
-      f"**Base:** {num(r['n_ok'])} departamentos, casas y PH en venta de la cartera de RE/MAX, "
-      f"relevados entre el {r['fecha_scraping']} y el {r['fecha_scraping_fin']}, con alquiler estimado confiable.")
+    w("**Cliente:** un pequeño inversor con ahorros en dólares que compra **una sola unidad** en CABA para "
+      f"alquilarla, con un presupuesto de {usd(S.PRESUPUESTO_MIN_USD)} a {usd(S.PRESUPUESTO_MAX_USD)} y un horizonte "
+      f"de {r['horizonte']} años. **Base:** {num(r['n_ok'])} departamentos, casas y PH en venta de la cartera de "
+      f"RE/MAX, relevados entre el {r['fecha_scraping']} y el {r['fecha_scraping_fin']}, con alquiler estimado "
+      f"confiable. **Vara:** la banda de retorno mínimo de las obligaciones negociables corporativas en dólares "
+      f"(YPF 2031 y Pampa 2037), de **{pct(r['piso'], 2)} a {pct(r['techo'], 2)}**.")
     w("")
-    w("Los hallazgos van ordenados por cuánto cambian la decisión del inversor. Cada uno cierra con "
-      "la decisión que modifica.")
+    w("Los hallazgos van ordenados por cuánto cambian la decisión del inversor, y cada uno cierra con la "
+      "decisión que modifica. Solo quedan los que la cambian.")
     w("")
     w("---")
     w("")
 
     # 1
-    # Los titulos tambien dependen de los datos: si maniana la neta supera el
-    # piso, el titulo no puede seguir afirmando lo contrario.
-    w("## 1. Solo por renta, el ladrillo " + ("no le gana" if r["neta_med"] < r["piso"] else "le gana")
-      + " a un bono corporativo en dólares")
+    no = r["neta_med"] < r["piso"]
+    w("## 1. Para la propiedad típica, la decisión es " + ("no comprar" if no else "comprar"))
     w("")
-    w(f"La rentabilidad **neta** mediana (después de {pct(r['vacancia'], 2)} de vacancia y "
-      f"{pct(r['gastos'], 2)} de gastos del propietario) es **{pct(r['neta_med'], 2)}**. La banda de "
-      f"retorno mínimo, las obligaciones negociables corporativas en dólares de YPF 2031 y Pampa 2037, "
-      f"va de **{pct(r['piso'], 2)} a {pct(r['techo'], 2)}**. La propiedad mediana queda "
-      f"{pp(abs(r['brecha_piso']), signo=False)} {'por debajo' if r['brecha_piso'] > 0 else 'por encima'} del piso.")
+    w(f"La rentabilidad **neta** mediana es **{pct(r['neta_med'], 2)}**, {pp(abs(r['brecha_piso']), signo=False)} "
+      f"{'por debajo' if no else 'por encima'} del piso de la banda. Solo el {pct(r['neta_sobre_piso'])} de las "
+      f"propiedades lo supera, y eso con la estimación central del alquiler.")
     w("")
-    w("| | mediana | supera el piso de la banda |")
+    w(f"La función de decisión (P1) es más exigente, como se declaró en la 2da entrega: recomienda comprar solo "
+      f"si la neta del **escenario pesimista** (el alquiler del percentil 10 de la banda de cada propiedad) supera "
+      f"el **techo** de la banda. Sobre las {num(r['n_u'])} propiedades del universo de la decisión (dentro del "
+      f"presupuesto, con estimación confiable y en el soporte del modelo):")
+    w("")
+    w("| | Propiedades | % del universo |")
     w("|---|---|---|")
-    w(f"| Rentabilidad bruta | {pct(r['bruta_med'], 2)} | {pct(r['bruta_sobre_piso'])} |")
-    w(f"| Rentabilidad neta | {pct(r['neta_med'], 2)} | {pct(r['neta_sobre_piso'])} |")
-    w(f"| Neta, solo dentro del presupuesto | {pct(r['neta_alc_med'], 2)} | {pct(r['neta_alc_sobre_piso'])} |")
-    w(f"| Neta en el extremo optimista de la banda de error (KPI 4) | — | {pct(r['optimista_sobre_piso'])} |")
+    w(f"| Neta central sobre el techo | {num(r['p1_central'])} | {pct(r['p1_central'] / r['n_u'] * 100)} |")
+    w(f"| **Neta pesimista sobre el techo (P1)** | **{num(r['n_p1'])}** | **{pct(r['n_p1'] / r['n_u'] * 100)}** |")
+    w(f"| TIR pesimista a {r['horizonte']} años, con costos de entrada, sobre el techo | {num(r['n_p1e'])} | "
+      f"{pct(r['n_p1e'] / r['n_u'] * 100, 2)} |")
     w("")
-    nb = r["barrios_sobre_piso"]
-    w(f"De los {r['n_barrios']} barrios con {S.MIN_VENTAS_BARRIO} o más ventas, "
-      f"{nb} {'tiene' if nb == 1 else 'tienen'} una neta mediana sobre el piso "
-      f"({r['barrios_sobre_piso_lista']}). "
-      f"La comparación es contra un instrumento que paga en dólares, cotiza en bolsa y no tiene "
-      f"vacancia, inquilino ni expensas extraordinarias.")
+    w(grafico(13, "p1_neta_pesimista", "Neta pesimista contra el techo de la banda"))
     w("")
-    w(f"**El resultado depende poco de los supuestos en el nivel, pero mucho en el umbral.** Recorriendo "
-      f"vacancia de {pct(r['sens_vac_min'], 0)} a {pct(r['sens_vac_max'], 0)} y gastos de "
-      f"{pct(r['sens_gas_min'], 0)} a {pct(r['sens_gas_max'], 0)}, la neta mediana se mueve entre "
-      f"{pct(r['sens_neta_min'], 2)} y {pct(r['sens_neta_max'], 2)}: "
-      f"{'en ningún escenario alcanza el piso' if r['sens_neta_max'] < r['piso'] else 'en algún escenario alcanza el piso'}. "
-      f"Lo que sí cambia es cuántos barrios lo superan: de {r['sens_barrios_max']} en el escenario más "
-      f"favorable a {r['sens_barrios_min']} en el más adverso.")
+    w(f"**Las que pasan son baratas para su celda.** Su m² cuesta una mediana de {num(r['p1_rel_m2'], 2)} veces el "
+      f"mediano de su barrio y tramo de superficie. Puede ser una oportunidad o algo que el aviso no dice (estado, uso, "
+      f"ubicación): la función las señala para verificar, no para comprar a ciegas.")
+    w("")
+    w(f"**El soporte del modelo.** El universo excluye {num(r['n_fuera_soporte'])} propiedades dentro del "
+      f"presupuesto, todas PH y casas. Hay {r['alq_casa']} alquileres observados de casas y {r['alq_ph']} de PH, "
+      f"contra {num(r['alq_depto'])} de departamentos, y sin ese filtro la primera recomendación era una casa de 9 "
+      f"ambientes con un alquiler extrapolado de más de USD 5.000. Las casas y los PH no se pueden recomendar con "
+      f"estos datos.")
+    w("")
+    w(f"**Es robusto.** En los 22 escenarios de sensibilidad (vacancia, gastos, ABL, costos de entrada, banda de "
+      f"retorno y margen por liquidez), las que pasan P1 van de {r['sens_p1_min']} a {r['sens_p1_max']}. Con "
+      f"costos de entrada, nunca más de {r['sens_p1e_max_con']}. Lo que se mueve es la lista: con un margen por "
+      f"liquidez de 1 punto pasan {r['sens_p1_margen1']}, y con el piso de la banda en lugar del techo, "
+      f"{r['sens_p1_piso']}.")
     w("")
     w(f"**Tampoco lo resuelve el horizonte.** Con un repago mediano de {num(r['repago_med'])} meses, en "
-      f"{r['horizonte']} años el alquiler devuelve el {pct(r['recupero_horizonte'], 0)} del precio. El resto "
-      f"depende de revender la unidad, en un mercado donde en 2025 solo el {pct(r['hip_2025'])} de las "
-      f"compraventas de la Ciudad se hizo con hipoteca: los compradores pagan con ahorros propios. "
-      f"Y vender lleva tiempo: en el {trimestre(r['liq_trim'])} un departamento en venta pasaba en promedio "
-      f"{num(r['liq_dias'])} días publicado, unos {num(r['liq_meses'], 1)} meses (el máximo de la serie "
-      f"fue {num(r['liq_max'])} días, en el {trimestre(r['liq_max_trim'])}). "
-      f"Es el costo de salida que una obligación negociable no tiene. Es tiempo publicado, no tiempo de "
-      f"venta, y es de toda la Ciudad (Instituto de Estadística de la Ciudad, sobre avisos de Argenprop).")
+      f"{r['horizonte']} años el alquiler devuelve el {pct(r['recupero_horizonte'], 0)} del precio. El resto depende "
+      f"de revender, en un mercado donde en 2025 solo el {pct(r['hip_2025'])} de las compraventas de la Ciudad se "
+      f"hizo con hipoteca, y donde en el {trimestre(r['liq_trim'])} un aviso pasaba en promedio "
+      f"{num(r['liq_dias'])} días publicado, unos {num(r['liq_meses'], 1)} meses (IDECBA, toda la Ciudad).")
     w("")
-    w("**Qué no dice:** que comprar sea un error. El KPI mide renta corriente y deja afuera la apreciación "
-      "del inmueble, que un corte temporal único no permite estimar.")
-    w("")
-    w("> **Decisión que cambia.** La pregunta deja de ser \"¿en qué barrio compro?\" y pasa a ser "
-      "\"¿compro o no?\". Comprar para renta solo se justifica para las unidades cuya neta supera el piso de "
-      "la banda con margen, o como una apuesta explícita a la revalorización, declarada como tal. Para la "
-      "unidad típica, la alternativa de renta fija en dólares domina en retorno corriente, liquidez y "
-      "riesgo de gestión.")
+    w("> **Decisión que cambia.** La respuesta a \"¿compro para alquilar?\" es **no** para la propiedad típica: "
+      "la renta fija en dólares le gana en retorno, liquidez y riesgo de gestión. Comprar se justifica solo para "
+      "las pocas unidades que superan el techo aun en el escenario pesimista, después de verificar por qué son "
+      "baratas, o como una apuesta explícita a la revalorización, declarada como tal.")
     w("")
 
     # 2
-    w("## 2. Alquilar por noche no rescata la inversión")
+    w(f"## 2. Con los costos de comprar, la distancia a la renta fija pasa de {num(abs(r['brecha_piso']), 2)} a "
+      f"{num(abs(r['brecha_tir']), 2)} puntos")
     w("")
-    w(f"Se comparó el alquiler temporal contra el tradicional, **neta contra neta**, en {r['tv_celdas']} "
-      f"combinaciones de barrio y dormitorios con datos suficientes de los dos lados (Inside Airbnb y RE/MAX). "
-      f"En el temporal las expensas y los servicios los paga el dueño, y se suman comisión de plataforma, "
-      f"gestión, desgaste y amoblamiento.")
+    w(f"Comprar cuesta una mediana de **{pct(r['entrada_med'], 2)} del precio** entre comisión, escribano, "
+      f"registrales y la mitad del Impuesto de Sellos (piso de cada rango publicado). Se pagan una vez y no vuelven "
+      f"al vender, así que la cifra comparable con una ON es la **TIR a {r['horizonte']} años**, que los incluye.")
     w("")
-    w(f"Como la ocupación no se observa, la medida central es la **ocupación de equilibrio**, con la que el "
-      f"temporal empata al tradicional: mediana **{pct(r['tv_equil_med'])}** con gestión tercerizada "
-      f"({pct(r['tv_equil_auto'])} autogestionado) y nunca menos de {pct(r['tv_equil_min'])}. La ocupación "
-      f"que estima Inside Airbnb para esas celdas tiene una mediana de {pct(r['tv_ocup_med'])}: con ella, el "
-      f"temporal le gana al tradicional en {r['tv_gana_base']} de {r['tv_celdas']} celdas, con una neta "
-      f"mediana de {pct(r['tv_neta_base_med'], 2)}. Aun con el {pct(r['ocup_ref'], 0)} de ocupación que "
-      f"informa la prensa, gana en {r['tv_gana_ref']}.")
+    w("| | Mediana | Barrios sobre el piso |")
+    w("|---|---|---|")
+    w(f"| Neta, ABL plano (2da entrega) | {pct(r['neta_antes'], 2)} | {r['barrios_antes']} |")
+    w(f"| Neta, ABL segmentado | {pct(r['neta_segm'], 2)} | {r['barrios_antes']} |")
+    w(f"| **TIR a {r['horizonte']} años, ABL segmentado + costos de entrada** | **{pct(r['tir_ad'], 2)}** | "
+      f"**{r['barrios_tir']}** |")
     w("")
-    comp_ref = ("mayor que" if r["tv_equil_med"] > r["ocup_ref"] else "menor o igual que")
-    w("> **Decisión que cambia.** El temporal no es la salida para mejorar la renta de la unidad típica. "
-      "Solo se justifica si el inversor puede sostener una ocupación por encima del equilibrio de su barrio "
-      f"y su tipología, que en la mediana es {comp_ref} la ocupación que publica la prensa para el mercado.")
+    w(grafico(5, "neta_tir_contra_banda", "Neta y TIR contra la banda de retorno"))
+    w("")
+    w(f"El **ABL segmentado** (Ley Tarifaria 2026, por barrio, superficie y tipo) casi no mueve el nivel, pero "
+      f"redistribuye: pesa {pct(r['abl_q1'], 2)} del alquiler en el quintil que menos rinde y {pct(r['abl_q5'], 2)} "
+      f"en el que más, contra un {pct(r['abl_plano'], 2)} plano para todos. Los **costos de entrada** sí mueven la "
+      f"conclusión: la distancia de la mediana al piso pasa de {pp(abs(r['brecha_piso']), signo=False)} a "
+      f"{pp(abs(r['brecha_tir']), signo=False)}.")
+    w("")
+    w(f"**La refacción.** Las unidades a reciclar cotizan con descuento (H3, hallazgo 4), equivalente a "
+      f"{pct(r['ref_umbral'])} del precio de la unidad. Una refacción mínima (baño, cocina, pintura) cuesta una "
+      f"mediana de {pct(r['ref_min'])} y el descuento la cubre en el {pct(r['ref_min_cubre'], 0)} de las unidades; "
+      f"una integral cuesta {pct(r['ref_int'])} y no la cubre en {'ninguna' if r['ref_int_cubre'] == 0 else pct(r['ref_int_cubre'], 0) + ' de ellas'}.")
+    w("")
+    w("> **Decisión que cambia.** El hallazgo 1 era optimista: sin los costos de entrada, la renta parecía más "
+      "cerca de la ON de lo que está. Ningún barrio supera el piso a cinco años. Una unidad a reciclar es "
+      "oportunidad solo si la obra es menor.")
     w("")
 
     # 3
-    w("## 3. La cartera de RE/MAX publica " + ("más barato" if r["sp_pond"] < 0 else "más caro")
-      + " que el mercado: sus rentabilidades están del lado " + ("alto" if r["sp_pond"] < 0 else "bajo"))
+    w("## 3. No hay una \"mejor propiedad\": la banda de error no deja elegir")
     w("")
-    w(f"Contra el precio publicado del m² que calcula el Instituto de Estadística de la Ciudad sobre avisos "
-      f"de Argenprop, en la misma celda de barrio, ambientes y estado, RE/MAX publica más barato en el "
-      f"{pct(r['sp_barato'], 0)} de las {r['sp_celdas']} celdas comparadas: {pct(r['sp_med_usado'], 1, True)} "
-      f"de desvío mediano en usados y {pct(r['sp_med_nuevo'], 1, True)} a estrenar. Contra el stock de "
-      f"departamentos del Censo 2022, la cartera sobrerrepresenta "
-      f"{'la comuna' if len(r['sr_sobre']) == 1 else 'las comunas'} {lista(r['sr_sobre'])} y subrepresenta "
-      f"{'la comuna' if len(r['sr_sub']) == 1 else 'las comunas'} {lista(r['sr_sub'])}: habría que reasignar el {pct(r['sr_reasignar'])} de las ventas para "
-      f"replicar la composición de la Ciudad.")
+    w(f"El modelo de alquiler (Ridge, 21 predictoras) le gana con claridad a una referencia simple, la mediana "
+      f"del barrio y el tramo de superficie: R² de {num(r['r2_ridge'], 3)} contra {num(r['r2_ref'], 3)}, y error "
+      f"relativo mediano de {pct(r['err_ridge'])} contra {pct(r['err_ref'])}, fuera de muestra en tres semillas. "
+      f"Ninguna alternativa le gana a él (la mejor llega a {num(r['r2_mejor_alt'], 3)}). Su banda del percentil 10 "
+      f"al 90 cubre el {pct(r['cob_ahora'])} de los alquileres observados fuera de muestra; la de la 2da entrega "
+      f"cubría el {pct(r['cob_antes'])}.")
     w("")
-    w(f"El precio está en el denominador de la rentabilidad. Si la unidad se comprara al precio publicado "
-      f"promedio del mercado y no al de la cartera, la neta mediana bajaría de {pct(r['neta_med'], 2)} a "
-      f"alrededor de {pct(r['neta_a_precio_mercado'], 2)} (aplicando el desvío promedio ponderado de "
-      f"{pct(r['sp_pond'], 1, True)}), suponiendo que el alquiler no cambia. No hay fuente oficial para medir "
-      f"si la cartera de alquileres tiene el mismo sesgo, así que el efecto neto no se puede firmar.")
+    w(f"Con esa banda, P2 recomienda A sobre B solo si la neta pesimista de A supera la optimista de B. **Eso pasa "
+      f"en el {pct(r['pares'])} de los pares**, en el {pct(r['pares_tramo'])} si se comparan unidades del mismo "
+      f"tramo de superficie y en el {pct(r['pares_barrio'])} dentro del mismo barrio. En los 22 escenarios de "
+      f"sensibilidad queda entre {pct(r['sens_pares_min'])} y {pct(r['sens_pares_max'])}.")
     w("")
-    w("> **Decisión que cambia.** Los niveles absolutos de rentabilidad del trabajo son los de la cartera de "
-      "RE/MAX, no los de CABA, y probablemente están del lado alto: la brecha contra la renta fija del "
-      "hallazgo 1 es, si algo, mayor. El inversor debe usar el análisis para **comparar** propiedades y "
-      "barrios entre sí, no para prometerse una rentabilidad.")
+    w(grafico(14, "p2_bandas_top30", "Bandas de las 30 propiedades mejor rankeadas"))
+    w("")
+    w(f"Ninguna propiedad supera con claridad a otras {num(r['n_front'])}, que forman la **frontera** de P2. Entre "
+      f"ellas ninguna se distingue de otra, y pesan los barrios de m² barato ({lista(r['front_barrios'])}). Su "
+      f"banda mediana es de {pp(r['ancho_front'], signo=False)}, contra {pp(r['ancho_u'], signo=False)} en el "
+      f"universo: parte de la frontera está ahí porque el modelo sabe poco de esas propiedades, no porque rindan "
+      f"más. La liquidez no desempata: el tiempo de publicación de IDECBA va de {num(r['liq_14_min'])} a "
+      f"{num(r['liq_14_max'])} días entre 1 y 4 ambientes ({num(r['liq_5'])} con 5 o más), y no existe por barrio.")
+    w("")
+    w("> **Decisión que cambia.** P2 no devuelve \"la mejor propiedad\" sino una lista corta. Un ranking "
+      "propiedad por propiedad sería más preciso que el dato que lo sostiene. Dentro de la lista, el criterio que "
+      "informa es el **ancho de la banda**: entre dos candidatas, la de banda más angosta tiene una rentabilidad "
+      "que se conoce mejor.")
     w("")
 
     # 4
-    w("## 4. Elegir la propiedad pesa tanto como elegir el barrio")
+    w("## 4. Qué rinde más, comparando propiedades semejantes")
     w("")
-    w(f"Entre el barrio que más rinde ({r['barrio_alto']}) y el que menos ({r['barrio_bajo']}) hay "
-      f"{pp(r['entre'], signo=False)} de rentabilidad bruta mediana. El rango intercuartil **dentro** de un "
-      f"solo barrio llega a {pp(r['iqr_max'], signo=False)} ({r['iqr_max_barrio']}), y el mediano es "
-      f"{pp(r['iqr_med'], signo=False)}. No es mezcla de tamaños: dentro de cada rango de superficie, la "
-      f"dispersión interna máxima de un barrio equivale a entre {pct(r['ratio_tramo_min'] * 100, 0)} y "
-      f"{pct(r['ratio_tramo_max'] * 100, 0)} de la distancia entre barrios.")
+    w("Los cuatro tests declarados en la 2da entrega, con α = 0,05 fijado antes de correrlos. Con miles de "
+      "observaciones casi todo es significativo, así que cada uno se lee por el tamaño del efecto y por si cambia "
+      "la decisión.")
     w("")
-    w(f"Pero la estimación tiene su propio error, de {pct(r['err_med'])} mediano: para el "
-      f"{pct(r['solapan'])} de las propiedades, la banda de incertidumbre contiene la mediana del mercado, "
-      f"y su diferencia contra el promedio no se distingue del ruido.")
+    w(f"- **El barrio es la palanca más fuerte (H1).** Cada USD 500 más de m² del barrio resta "
+      f"{pp(abs(r['h1_efecto']), signo=False)} de rentabilidad bruta (IC 95% {ic(r['h1_ic'], 2, ' pp')}; Spearman "
+      f"{num(r['h1_rho'], 2)} sobre {r['h1_barrios']} barrios, p {pval(r['h1_p'])}). Se sostiene en "
+      f"{r['h1_tramos_rechazan']} de {r['h1_tramos']} tramos de superficie, después de corregir por comparaciones "
+      f"múltiples.")
+    w(f"- **Las torres nuevas con amenities rinden menos.** La síntesis de atributos (PCA y MCA) separa la oferta en "
+      f"cuatro micro-mercados. Contra un departamento estándar del mismo barrio, tamaño y tipo, la \"torre con "
+      f"amenities\" ({pct(r['mm_share'], 0)} de los avisos) cuesta {pct(r['mm_venta'], 0, True)} por m² (IC "
+      f"{ic(r['mm_venta_ic'], 0, '%')}) y se alquila {pct(r['mm_alq'], 0, True)} (IC {ic(r['mm_alq_ic'], 0, '%')}): "
+      f"unos {pp(abs(r['mm_pp']), 1, signo=False)} menos de bruta. Se mide con precios y alquileres publicados, "
+      f"no con la rentabilidad estimada.")
+    w(f"- **A reciclar: descuento real, oportunidad condicionada (H3).** Cotizan {pct(r['h3_precio'], 1)} por m² "
+      f"contra sus comparables (IC {ic(r['h3_precio_ic'], 1, '%')}, p {pval(r['h3_p_precio'])}) y rinden "
+      f"{pp(r['h3_renta'])} de bruta (IC {ic(r['h3_renta_ic'], 2, ' pp')}). Ver la refacción en el hallazgo 2.")
+    w(f"- **Lo viejo rinde algo más, pero poco (H4).** Cada década de antigüedad baja el m² de venta "
+      f"{pct(abs(r['h4_venta']))} y el alquiler {pct(abs(r['h4_alquiler']))} (p {pval(r['h4_p'])}): "
+      f"{pp(r['h4_bruta_pp'])} de bruta por década, menos de un punto en 40 años.")
     w("")
-    w("> **Decisión que cambia.** \"Comprá en tal barrio\" no alcanza como criterio. El inversor tiene que "
-      "comparar unidades concretas, y solo preferir una sobre otra cuando sus bandas de incertidumbre no se "
-      "superponen. Si se superponen, la elección se decide por liquidez o por riesgo, no por el KPI.")
+    w(grafico(9, "h1_por_tramo", "H1 por tramo de superficie"))
+    w("")
+    w(grafico(12, "micromercados_prima", "Prima de cada micro-mercado en venta y alquiler"))
+    w("")
+    w("> **Decisión que cambia.** Dentro del presupuesto, buscar en barrios de m² barato y evitar las torres "
+      "nuevas con amenities: lo que se paga de más al comprar no vuelve en el alquiler. Pagar amenities es una "
+      "decisión de consumo, no de inversión. Las unidades a reciclar valen la pena solo con obra menor.")
     w("")
 
     # 5
-    w("## 5. Qué rinde más, comparando propiedades semejantes")
+    w("## 5. Alquilar por noche no rescata la inversión, salvo autogestionado")
     w("")
-    w("Cada efecto se mide **dentro de celdas de barrio y rango de superficie**, para no atribuirle a un "
-      "atributo lo que es diferencia de zona o de tamaño.")
+    w(f"Neta contra neta, en {r['tv_celdas']} celdas de barrio y dormitorios. La **ocupación de equilibrio**, con la "
+      f"que el temporal empata al tradicional, tiene una mediana de **{pct(r['tv_equil_med'])}** con gestión "
+      f"tercerizada y {pct(r['tv_equil_auto'])} autogestionado. Con la ocupación que estima Inside Airbnb "
+      f"({pct(r['tv_ocup_med'])} de mediana) el temporal gana en {r['tv_gana_base']} celdas. Con el "
+      f"{pct(r['ocup_ref'], 0)} que informa la prensa, gana en {r['tv_gana_ref']} con gestión tercerizada y en "
+      f"{r['tv_gana_ref_auto']} autogestionado.")
     w("")
-    w(f"- **Metro cuadrado barato.** Los barrios con el m² más caro rinden menos (Spearman {rho(r['h1_rho'])} "
-      f"sobre {r['n_barrios']} barrios), y la relación se sostiene dentro de cada rango de superficie "
-      f"(de {rho(r['h1_tramo_min'])} a {rho(r['h1_tramo_max'])}).")
-    w(f"- **Fuera del corredor norte.** En el norte (comunas {lista(r['zona_norte_comunas'])}) solo el "
-      f"{pct(r['zona_norte_piso'])} de las propiedades supera en neto el piso de las ON, contra el "
-      f"{pct(r['zona_centro_piso'])} en el centro y el {pct(r['zona_sur y oeste_piso'])} en el sur y "
-      f"oeste, con la oferta repartida en proporciones parecidas entre las tres zonas "
-      f"({pct(r['zona_norte_pct'], 0)}, {pct(r['zona_centro_pct'], 0)} y "
-      f"{pct(r['zona_sur y oeste_pct'], 0)}).")
-    w(f"- **Amenities.** {'Restan' if r['am_estrato'] < 0 else 'Suman'} {pp(abs(r['am_estrato']), signo=False)} "
-      f"de rentabilidad dentro del estrato ({pp(abs(r['am_estrato_t']), signo=False)} fijando también el tipo "
-      f"de propiedad), con diferencia negativa en el {pct(r['am_neg'], 0)} de {r['am_celdas']} celdas. Encarecen el m² un {pct(r['am_prima_precio'])} y "
-      f"suben el alquiler por m² solo un {pct(r['am_prima_alq'])}.")
-    w(f"- **Unidades chicas.** Entre departamentos del mismo barrio, los de {r['tam_chico']} m² rinden "
-      f"{pp(r['tam_dif'])} respecto de los de {r['tam_grande']} m², y rinden más en el "
-      f"{pct(r['tam_pct'], 0)} de los {r['tam_barrios']} barrios comparables.")
-    w(f"- **A reciclar.** Cotizan con un descuento de {pct(-r['h3_desc'])} en el m² respecto de propiedades "
-      f"comparables (negativo en el {pct(r['h3_neg'], 0)} de {r['h3_celdas']} celdas), y dejan "
-      f"{pp(r['h3_renta'])} de rentabilidad bruta antes de descontar el costo del reciclaje, que el dataset "
-      f"no tiene.")
+    w(grafico(15, "p3_ocupacion", "Celdas donde gana el temporal según la ocupación"))
     w("")
-    w("> **Decisión que cambia.** Dentro del presupuesto, conviene buscar fuera del corredor norte e inclinarse por barrios de m² más barato, "
-      "unidades chicas y edificios sin amenities, y mirar las unidades a reciclar como oportunidad solo si "
-      "el costo de obra cabe en el descuento. Pagar amenities es una decisión de consumo, no de inversión. "
-      "Las unidades chicas rotan más de inquilino: la vacancia uniforme del KPI 2 probablemente la "
-      "subestima.")
+    w("> **Decisión que cambia (P3).** Tradicional, salvo para un inversor que opere el temporal por su cuenta y "
+      "tenga evidencia de poder sostener más de la mitad del año ocupado. Autogestionar es un trabajo, no un "
+      "ahorro, y las dos ocupaciones de referencia son estimaciones.")
     w("")
 
     # 6
-    w("## 6. Estado de las hipótesis")
+    barato = r["sp_pond"] < 0
+    w("## 6. La cartera de RE/MAX publica " + ("más barato" if barato else "más caro") + " que el mercado")
     w("")
-    w("Se evalúan por el tamaño del efecto dentro del estrato, sin p-valor. El contraste formal es alcance "
-      "de la 3ra entrega, y el test que lo hará queda declarado.")
+    w(f"Contra el precio publicado del m² de IDECBA en la misma celda de barrio, ambientes y estado, RE/MAX publica "
+      f"más barato en el {pct(r['sp_barato'], 0)} de {r['sp_celdas']} celdas: {pct(r['sp_pond'], 1, True)} en "
+      f"promedio ponderado ({pct(r['sp_med_usado'], 1, True)} en usados, {pct(r['sp_med_nuevo'], 1, True)} a "
+      f"estrenar). La cartera sobrerrepresenta {'la comuna' if len(r['sr_sobre']) == 1 else 'las comunas'} "
+      f"{lista(r['sr_sobre'])} y subrepresenta {'la comuna' if len(r['sr_sub']) == 1 else 'las comunas'} "
+      f"{lista(r['sr_sub'])} contra el stock del Censo 2022. Comprando al precio promedio del mercado, la neta "
+      f"mediana bajaría de {pct(r['neta_med'], 2)} a alrededor de {pct(r['neta_a_precio_mercado'], 2)}.")
     w("")
-    w("| Hipótesis | Evidencia en esta entrega | Estado | Test formal (3ra entrega) |")
-    w("|---|---|---|---|")
-    w(f"| **H1.** La rentabilidad bruta cae con el precio del m² del barrio | Spearman {rho(r['h1_rho'])} "
-      f"sobre {r['n_barrios']} barrios; de {rho(r['h1_tramo_min'])} a {rho(r['h1_tramo_max'])} dentro de "
-      f"cada rango de superficie. La 1ra entrega daba {rho(r['h1_rho_e1'])}: la diferencia la explican las "
-      f"dummies de RegEx (README) | {'Respaldada' if r['h1_rho'] < -0.5 and r['h1_tramo_max'] < -0.5 else 'No respaldada'} | Spearman unilateral con p-valor por permutación, repetido "
-      f"por tramo con corrección por comparaciones múltiples |")
-    w(f"| **H2.** El precio del m² cae con la distancia al subte | No evaluable: requiere fusión espacial | "
-      f"Pendiente | Regresión del precio del m² sobre la distancia, con efectos fijos de barrio |")
-    w(f"| **H3.** Los inmuebles a reciclar cotizan con descuento, y ese descuento es la oportunidad | "
-      f"Descuento de {pct(-r['h3_desc'])} en el m² en {r['h3_celdas']} celdas; {pp(r['h3_renta'])} de "
-      f"rentabilidad bruta en {r['h3_celdas_r']} celdas | "
-      f"{'Respaldada, tentativa por la cantidad de celdas' if r['h3_desc'] < 0 and r['h3_renta'] > 0 else 'No respaldada'} | "
-      f"Van Elteren (Mann-Whitney estratificado por celda) |")
-    w(f"| **H4.** La antigüedad pesa más en el precio de venta que en el alquiler | Spearman antigüedad vs "
-      f"m² dentro del estrato: {rho(r['h4_venta'])} en venta ({r['h4_celdas_v']} celdas) contra "
-      f"{rho(r['h4_alq'])} en alquiler ({r['h4_celdas_a']} celdas), con antigüedad observada | "
-      f"{'Respaldada, tentativa por las pocas celdas de alquiler' if r['h4_venta'] < r['h4_alq'] else 'No respaldada'} | "
-      f"Wald sobre la diferencia de coeficientes de dos regresiones (log precio y log alquiler) con efectos "
-      f"fijos de celda |")
+    w("> **Decisión que cambia.** Los niveles de rentabilidad son los de la cartera, no los de CABA, y "
+      f"probablemente están del lado {'alto' if barato else 'bajo'}: la brecha contra la renta fija del hallazgo 1 "
+      "es, si algo, mayor. El análisis sirve para **comparar** propiedades, no para prometer una rentabilidad.")
     w("")
-    w("> **Decisión que cambia.** H1 y H4 describen el mismo mecanismo: el precio de compra se mueve más que "
-      "el alquiler, y lo que abarata la compra (zona, antigüedad) sube la renta. Para un inversor que busca "
-      "renta, lo viejo y lo periférico no son defectos a evitar sino la fuente del rendimiento, siempre que "
-      "entre en su tolerancia de riesgo y liquidez.")
+
+    # 7
+    w("## 7. La cercanía al transporte ya está en el precio del barrio (H2, reformulada)")
+    w("")
+    w(f"Con subte, tren y Metrobús, el {pct(r['acc_red'])} de los avisos tiene una estación a menos de "
+      f"{num(r['radio'])} m, contra el {pct(r['acc_subte'])} con el subte solo. En las comunas "
+      f"{lista(r['comunas_sin_subte'])}, sin ninguna boca de subte a esa distancia, la red combinada llega a entre "
+      f"el {pct(r['red_sin_subte_min'], 0)} y el {pct(r['red_sin_subte_max'], 0)}.")
+    w("")
+    w(f"Dentro del mismo barrio y con controles del inmueble, la pendiente lineal del m² con la distancia **no es "
+      f"significativa** ({pct(r['h2_lineal_pct'], 1, True)} por km, p {pval(r['h2_lineal_p'])}, errores agrupados por "
+      f"barrio). Lo que sí aparece es un escalón: **más allá de 1 km de la red, el m² vale "
+      f"{pct(abs(r['h2_escalon_pct']))} menos** (IC {ic(r['h2_escalon_ic'], 1, '%')}, p {pval(r['h2_escalon_p'])}). "
+      f"Afecta al {pct(r['h2_lejos_pct'], 0)} de los avisos.")
+    w("")
+    w(grafico(3, "h2_perfil_distancia", "Precio del m² por tramo de distancia a la red"))
+    w("")
+    w("> **Decisión que cambia, poco.** Dentro de su barrio, el inversor no tiene que pagar una prima por estar al "
+      "lado de una estación: hasta 1 km la distancia no se paga. Lejos de la red hay un descuento chico en pocos "
+      "avisos, y el modelo de alquiler no muestra que el alquiler caiga en la misma proporción.")
+    w("")
+
+    # Hipotesis
+    w("## Estado de las hipótesis")
+    w("")
+    w("| Hipótesis | Test | Resultado | Efecto (IC 95%) | ¿Cambia la decisión? |")
+    w("|---|---|---|---|---|")
+    w(f"| **H1.** La rentabilidad cae con el precio del m² del barrio | Spearman con permutación; por tramo con Holm | "
+      f"Se sostiene (p {pval(r['h1_p'])}) | {pp(r['h1_efecto'])} por USD 500/m² {ic(r['h1_ic'], 2)} | Sí |")
+    w(f"| **H2.** El m² cae con la distancia al transporte | Efectos fijos de barrio, errores agrupados | Lineal: no "
+      f"(p {pval(r['h2_lineal_p'])}). Escalón a 1 km: sí (p {pval(r['h2_escalon_p'])}). **Se reformula** | "
+      f"{pct(r['h2_escalon_pct'], 1, True)} {ic(r['h2_escalon_ic'], 1, '%')} | Poco |")
+    w(f"| **H3.** Las unidades a reciclar cotizan con descuento | Van Elteren por celda barrio × superficie | Se sostiene "
+      f"(p {pval(r['h3_p_precio'])}) | {pct(r['h3_precio'], 1)} del m² {ic(r['h3_precio_ic'], 1, '%')} | Sí, con obra menor |")
+    w(f"| **H4.** La antigüedad pesa más en venta que en alquiler | Wald, bootstrap por celdas | Se sostiene "
+      f"(p {pval(r['h4_p'])}) | {pp(r['h4_bruta_pp'])} de bruta por década | Poco |")
+    w("")
+    w("Desarrollo completo en `notebooks/04_validacion.ipynb`.")
+    w("")
+
+    # Lo que se dejo afuera
+    w("## Qué hallazgos de la 2da entrega no siguen")
+    w("")
+    w("- **El mapa por zonas (norte, centro, sur y oeste).** Lo resume H1, que lo contrasta formalmente y en "
+      "unidades del inversor.")
+    w("- **La dispersión dentro de cada barrio.** Era el argumento para comparar unidades y no barrios. Ahora lo "
+      "responde P2 con la banda de cada propiedad (hallazgo 3).")
+    w("- **Las unidades chicas rinden más.** No tiene contraste formal, y la frontera de P2 muestra que el tamaño "
+      "se confunde con la incertidumbre del modelo en las unidades grandes. No cambia la decisión de forma "
+      "defendible.")
     w("")
 
     # Limites
     w("## Lo que este informe no permite afirmar")
     w("")
-    w("- **Retorno total.** Solo se mide renta; la apreciación requiere una serie temporal.")
-    w("- **Causalidad.** Comparar dentro del estrato controla por zona, tamaño y tipología, no por todo.")
-    w("- **El mercado de CABA.** Se describe la cartera de una red inmobiliaria, con el sesgo del hallazgo 3.")
     w("- **Precios de cierre.** Todos los precios son de publicación, del lado de la venta y del alquiler.")
-    w("- **Liquidez por propiedad.** El tiempo de publicación es un promedio de la Ciudad; el dataset "
-      "es un corte único y no mide cuánto tarda en venderse cada unidad.")
+    w("- **El mercado de CABA.** Se describe la cartera de una red inmobiliaria, con el sesgo del hallazgo 6.")
+    w("- **Una rentabilidad exacta.** Cada estimación tiene su banda: los KPIs por propiedad son rangos.")
+    w("- **Casas y PH.** Quedan fuera de las recomendaciones: el modelo casi no tiene alquileres observados de ellos.")
+    w("- **Retorno total.** Solo se mide renta; la apreciación requiere una serie temporal. La TIR supone reventa "
+      "al mismo precio en dólares y no incluye costos de salida.")
+    w("- **Riesgo legal.** Desalojos, impagos y cambios de régimen no tienen una fuente que los cuantifique: es una "
+      "limitación declarada y todo resultado es optimista en esa medida.")
+    w("- **Liquidez por propiedad.** El tiempo de publicación es de toda la Ciudad, por cantidad de ambientes.")
+    w("- **Causalidad.** Comparar dentro del estrato controla por zona, tamaño y tipología, no por todo.")
     w("")
-    w("Los supuestos (vacancia, gastos, banda de retorno, horizonte, costos del temporal) están en "
-      "`supuestos.py` con su fuente y fecha. El detalle de cada hallazgo está en `notebooks/03_eda.ipynb`, y "
-      "las fuentes externas, en `informe/FUENTES_EXTERNAS.md`.")
+    w("Los supuestos están en `src/supuestos.py` con su fuente y fecha, y las fuentes externas en "
+      "`informe/FUENTES_EXTERNAS.md`. Cada hallazgo se desarrolla en los notebooks 01 a 06.")
     w("")
     return "\n".join(L)
 
 
 def main() -> int:
-    requeridos = [os.path.join(P, f) for f in ["dataset_analitico.csv", "sensibilidad_supuestos.csv",
-                                               "temporal_vs_tradicional.csv", "sesgo_precio_barrio.csv",
-                                               "sesgo_representacion_comuna.csv"]]
+    requeridos = [os.path.join(P, f) for f in [
+        "dataset_analitico.csv", "antes_despues_kpis.csv", "comparacion_modelos.csv", "cobertura_banda.csv",
+        "decision_sensibilidad.csv", "decision_p3.csv", "temporal_vs_tradicional.csv", "sesgo_precio_barrio.csv",
+        "sesgo_representacion_comuna.csv", "modelo_alquiler.joblib"]]
     requeridos += [os.path.join(E, "colegio_escribanos_mensual.csv"),
-                   os.path.join(E, "estadistica_ciudad_tiempo_publicacion.csv"),
-                   "data/reference/ranking_barrios_entrega1.csv"]
+                   os.path.join(E, "estadistica_ciudad_tiempo_publicacion.csv")]
     faltan = [f for f in requeridos if not os.path.exists(f)]
     if faltan:
         print(f"Faltan insumos: {faltan}")
-        print("Correr antes: py src/kpis.py, py src/fuentes_externas.py, py src/temporal.py, py src/sesgo.py")
+        print("Correr antes el pipeline completo (ver README, Reproducir)")
         return 1
     r = calcular()
     texto = informe(r)
@@ -522,8 +545,7 @@ def main() -> int:
     with open(SALIDA, "w", encoding="utf-8", newline="\n") as f:
         f.write(texto)
     print(f"Escrito {SALIDA} ({len(texto.splitlines())} lineas)")
-    print(f"    neta mediana {r['neta_med']:.2f}% contra piso {r['piso']:.2f}%; "
-          f"{r['neta_sobre_piso']:.1f}% de las propiedades lo supera")
+    print(f"    neta mediana {r['neta_med']:.2f}% contra piso {r['piso']:.2f}%; P1: {r['n_p1']} de {r['n_u']:,}")
     return 0
 
 

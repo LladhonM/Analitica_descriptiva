@@ -36,6 +36,7 @@ Uso:
 
 Salidas:
     data/processed/comparacion_modelos.csv         una fila por modelo y semilla
+    data/processed/cobertura_banda.csv             cobertura de la banda anterior y la nueva
     data/processed/reporte_comparacion_modelos.txt log
 """
 
@@ -64,6 +65,7 @@ from fuentes_externas import Reporte
 ENTRADA = "data/processed/dataset_espacial.csv"
 MODELO = "data/processed/modelo_alquiler.joblib"
 SALIDA = "data/processed/comparacion_modelos.csv"
+SALIDA_BANDA = "data/processed/cobertura_banda.csv"
 REPORTE = "data/processed/reporte_comparacion_modelos.txt"
 
 SEMILLAS = [M.SEMILLA_CV, 7, 2026]
@@ -236,8 +238,14 @@ def main() -> int:
     rep("lo que dice cubrir.")
 
     t.round(4).to_csv(SALIDA, index=False, encoding="utf-8-sig")
+    pd.DataFrame([
+        {"banda": "anterior", "definicion": "estimacion +- error mediano del tramo (2da entrega)",
+         "cobertura": round(anterior, 4)},
+        {"banda": "vigente", "definicion": "percentiles 10 y 90, regresion cuantilica calibrada",
+         "cobertura": round(banda["cobertura_calibrada"], 4)},
+    ]).to_csv(SALIDA_BANDA, index=False, encoding="utf-8-sig")
     rep("")
-    rep(f"Archivo: {SALIDA} ({len(t)} filas)")
+    rep(f"Archivos: {SALIDA} ({len(t)} filas), {SALIDA_BANDA}")
     with open(REPORTE, "w", encoding="utf-8") as f:
         f.write("\n".join(rep.lineas))
     return 0

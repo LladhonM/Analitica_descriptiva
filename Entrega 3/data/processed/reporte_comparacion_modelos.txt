@@ -2,7 +2,7 @@
 ============================================================================
 MODELO DE ALQUILER: COMPARACION FUERA DE MUESTRA
 ============================================================================
-Fecha: 2026-10-27 20:55
+Fecha: 2026-10-29 16:45
 Alquileres: 1,348. Esquema: KFold(5) en las semillas [42, 7, 2026].
     semilla 42: lista
     semilla 7: lista
@@ -45,4 +45,4 @@ La banda anterior era un rango del 50% por construccion: decia 'el alquiler esta
 estos dos valores' y acertaba la mitad de las veces. La nueva es mas ancha porque cubre
 lo que dice cubrir.
 
-Archivo: data/processed/comparacion_modelos.csv (12 filas)
+Archivos: data/processed/comparacion_modelos.csv (12 filas), data/processed/cobertura_banda.csv

@@ -1,0 +1,3 @@
+﻿banda,definicion,cobertura
+anterior,estimacion +- error mediano del tramo (2da entrega),0.5007
+vigente,"percentiles 10 y 90, regresion cuantilica calibrada",0.816

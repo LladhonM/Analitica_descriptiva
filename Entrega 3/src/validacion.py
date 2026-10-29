@@ -153,3 +153,88 @@ def pendiente_intra(x: pd.Series, y: pd.Series, celda: pd.Series,
     pesos = rng.multinomial(len(s), np.full(len(s), 1 / len(s)), size=n_boot)
     boot = (pesos @ s["sxy"].values) / (pesos @ s["sxx"].values)
     return float(beta), boot, len(s)
+
+
+# ==========================================================================
+# RESUMEN DE LOS CUATRO TESTS (para el informe)
+# ==========================================================================
+
+def resumen_hipotesis(df: pd.DataFrame, n_boot: int = 5_000) -> dict:
+    """
+    Las cifras de la tabla resumen del notebook 04, con los mismos
+    procedimientos, umbrales y semillas. Las usa reporte.py: el informe no
+    puede leer las salidas de un notebook, y escribir los numeros a mano los
+    desincronizaria. Si se cambia un test en el notebook, hay que cambiarlo aca.
+    """
+    import accesibilidad as A
+    import eda
+    import supuestos as S
+
+    r = {}
+    ok = df[(df["estimacion_confiable"] == 1) & df["rent_bruta_pct"].notna()]
+    estrato = ["barrio", "superficie_rango"]
+
+    # H1: Spearman entre barrios, y por tramo con Holm.
+    g = ok.groupby("barrio").agg(n=("rent_bruta_pct", "size"), m2=("venta_m2_usd", "median"),
+                                 renta=("rent_bruta_pct", "median"))
+    b = g[g["n"] >= S.MIN_VENTAS_BARRIO]
+    r["h1_rho"], r["h1_p"] = permutacion_spearman(b["m2"], b["renta"], n_perm=10_000, semilla=1)
+    ts = stats.theilslopes(b["renta"], b["m2"])
+    r.update(h1_barrios=len(b), h1_efecto=ts.slope * 500, h1_ic=(ts.low_slope * 500, ts.high_slope * 500))
+    ps = {}
+    for tramo in S.ORDEN_SUPERFICIE_RANGO:
+        gg = ok[ok["superficie_rango"] == tramo].groupby("barrio").agg(
+            n=("rent_bruta_pct", "size"), m2=("venta_m2_usd", "median"), renta=("rent_bruta_pct", "median"))
+        gg = gg[gg["n"] >= S.MIN_AVISOS_CELDA]
+        if len(gg) >= 5:
+            ps[tramo] = permutacion_spearman(gg["m2"], gg["renta"], n_perm=10_000, semilla=2)[1]
+    holm_p = holm(pd.Series(ps))
+    r.update(h1_tramos=len(ps), h1_tramos_rechazan=int((holm_p < S.ALFA).sum()))
+
+    # H2: efectos fijos de barrio y controles, errores agrupados por barrio.
+    v = df[(df["operacion"] == "venta") & df["venta_m2_usd"].notna() & df["dist_transporte_m"].notna()]
+    y = np.log(v["venta_m2_usd"].values)
+    X0 = A.matriz_base(v, controles=True)
+    G = v["barrio"].nunique()
+    q = stats.t.ppf(0.975, G - 1)
+    for nombre, reg in [("lineal", v[["dist_transporte_m"]].values / 1000),
+                        ("escalon", (v["dist_transporte_m"].values > 1000).astype(float)[:, None])]:
+        beta, se = ols_agrupado(np.hstack([X0, reg]), y, v["barrio"].values)
+        t = beta[-1] / se[-1]
+        r[f"h2_{nombre}_pct"] = float(np.expm1(beta[-1]) * 100)
+        r[f"h2_{nombre}_ic"] = (float(np.expm1(beta[-1] - q * se[-1]) * 100), float(np.expm1(beta[-1] + q * se[-1]) * 100))
+        r[f"h2_{nombre}_p"] = float(stats.t.cdf(t, G - 1))
+    r["h2_lejos_pct"] = float((v["dist_transporte_m"] > 1000).mean() * 100)
+
+    # H3: Van Elteren y efecto mediano por celda con bootstrap de celdas.
+    ventas = df[(df["operacion"] == "venta") & df["venta_m2_usd"].notna()]
+    r["h3_p_precio"] = van_elteren(ventas["venta_m2_usd"], ventas["a_reciclar"],
+                                   ventas["barrio"] + " | " + ventas["superficie_rango"], S.MIN_GRUPO_ESTRATO)["p_menor"]
+    r["h3_p_renta"] = 1 - van_elteren(ok["rent_bruta_pct"], ok["a_reciclar"],
+                                      ok["barrio"] + " | " + ok["superficie_rango"], S.MIN_GRUPO_ESTRATO)["p_menor"]
+    for base, col, relativo, semilla, clave in [(ventas, "venta_m2_usd", True, 5, "h3_precio"),
+                                                (ok, "rent_bruta_pct", False, 6, "h3_renta")]:
+        t = eda.efecto_estratificado(base, "a_reciclar", col, estrato, S.MIN_GRUPO_ESTRATO)
+        x = (t["diferencia"] / t["mediana_0"] * 100 if relativo else t["diferencia"]).values
+        w = t["peso"].values
+        rng = np.random.default_rng(semilla)
+        bt = [eda.mediana_ponderada(x[i], w[i]) for i in (rng.integers(0, len(t), len(t)) for _ in range(n_boot))]
+        r[clave] = eda.mediana_ponderada(x, w)
+        r[f"{clave}_ic"] = tuple(np.percentile(bt, [2.5, 97.5]))
+
+    # H4: dos pendientes intra-celda y Wald con error bootstrap por celdas.
+    obs = df[df["antiguedad_anios_imputada"] == 0]
+    vv = obs[(obs["operacion"] == "venta") & obs["venta_m2_usd"].notna()]
+    aa = obs[(obs["operacion"] == "alquiler") & obs["alquiler_m2_usd_mes"].notna()]
+    bv, boot_v, _ = pendiente_intra(vv["antiguedad_anios"], np.log(vv["venta_m2_usd"]),
+                                    vv["barrio"] + "|" + vv["superficie_rango"], n_boot=n_boot, semilla=7)
+    ba, boot_a, _ = pendiente_intra(aa["antiguedad_anios"], np.log(aa["alquiler_m2_usd_mes"]),
+                                    aa["barrio"] + "|" + aa["superficie_rango"], n_boot=n_boot, semilla=8)
+    z = (bv - ba) / (boot_v - boot_a).std(ddof=1)
+    decada = lambda x: np.expm1(10 * np.asarray(x)) * 100
+    rel = (1 + decada(ba) / 100) / (1 + decada(bv) / 100) - 1
+    r.update(h4_venta=float(decada(bv)), h4_alquiler=float(decada(ba)), h4_p=float(stats.norm.cdf(z)),
+             h4_bruta_pp=float(rel * ok["rent_bruta_pct"].median()),
+             h4_rel_ic=tuple(np.percentile((1 + decada(boot_a) / 100) / (1 + decada(boot_v) / 100) - 1,
+                                           [2.5, 97.5]) * 100))
+    return r

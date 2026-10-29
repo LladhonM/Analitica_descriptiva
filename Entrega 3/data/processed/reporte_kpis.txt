@@ -2,7 +2,7 @@
 ============================================================================
 MATERIALIZACION DE KPIs
 ============================================================================
-Fecha   : 2026-10-27 20:55
+Fecha   : 2026-10-29 16:52
 Entrada : data/processed/dataset_espacial.csv
 Supuestos: vacancia 5.88%, gastos 10.24% + ABL de cada propiedad
 

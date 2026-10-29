@@ -2,7 +2,7 @@
 ============================================================================
 MODELO DE ALQUILER: COMPARACION FUERA DE MUESTRA
 ============================================================================
-Fecha: 2026-10-29 16:45
+Fecha: 2026-10-29 16:52
 Alquileres: 1,348. Esquema: KFold(5) en las semillas [42, 7, 2026].
     semilla 42: lista
     semilla 7: lista

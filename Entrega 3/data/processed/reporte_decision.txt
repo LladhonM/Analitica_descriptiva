@@ -2,7 +2,7 @@
 ============================================================================
 FUNCION DE DECISION: P1, P2 Y P3
 ============================================================================
-Fecha: 2026-10-29 16:37
+Fecha: 2026-10-29 16:53
 Ventas con estimacion confiable: 9,203. En el presupuesto (USD 80,000 a 200,000): 5,198
     fuera del soporte del modelo (celda tipo x tramo con menos de 30 alquileres): 714, {'ph': 619, 'casa': 95}
     universo de la decision: 4,484

@@ -429,6 +429,31 @@ MIN_CELDA_TEMPORAL = 20
 
 
 # ==========================================================================
+# 4d. FUNCION DE DECISION (decision.py)
+# ==========================================================================
+# Soporte del modelo: una propiedad entra a las recomendaciones solo si su
+# celda tipo x tramo de superficie tiene al menos esta cantidad de alquileres
+# observados. Con menos, el alquiler estimado es extrapolacion: hay 14
+# alquileres de casas y 44 de PH contra 1.290 de departamentos, y sin este
+# filtro P1 y P2 recomiendan casas de 6 a 10 ambientes con netas de 15% a
+# 27%. Es el mismo minimo que para entrar al ranking de barrios
+# (MIN_VENTAS_BARRIO, seccion 5).
+MIN_ALQ_SOPORTE = 30
+
+# Margen por liquidez de P1: cuanto tiene que superar la neta pesimista al
+# techo de la banda para pagar que el inmueble tarda meses en venderse y el
+# bono no. NO HAY FUENTE para esa prima: el caso base es 0, lo mas favorable
+# a comprar, y la sensibilidad prueba los otros valores.
+MARGEN_LIQUIDEZ_PCT = 0.0        # sin fuente; ver SENSIBILIDAD_MARGEN
+SENSIBILIDAD_MARGEN = [0.0, 0.5, 1.0]
+# Gastos sin ABL (mantenimiento, seguro, administracion) en la sensibilidad
+# de la decision: el base y dos puntos de cada lado.
+SENSIBILIDAD_GASTOS_SIN_ABL_DELTA = [-2.0, 0.0, 2.0]
+# Ocupaciones sostenibles del temporal que se prueban en P3, en %.
+SENSIBILIDAD_OCUPACION = [20, 30, 40, 50, 60, 70, 80]
+
+
+# ==========================================================================
 # 5. COBERTURA Y COMPLETITUD
 # ==========================================================================
 # Minimos de observaciones por debajo de los cuales un estadistico no se

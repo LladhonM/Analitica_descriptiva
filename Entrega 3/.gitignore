@@ -11,6 +11,7 @@ venv/
 #   py src/variables.py            -> dataset_variables
 #   py src/espacial.py             -> dataset_espacial
 #   py src/kpis.py                 -> dataset_analitico  <- ESTE SI se versiona
+#   py src/decision.py             -> le suma las columnas de la decision
 #
 # Los intermedios pesan ~90 MB entre los cuatro y no se pueden mergear.
 # El dataset_analitico.csv, en cambio, es el entregable: es la matriz final

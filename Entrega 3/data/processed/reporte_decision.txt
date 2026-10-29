@@ -1,0 +1,66 @@
+
+============================================================================
+FUNCION DE DECISION: P1, P2 Y P3
+============================================================================
+Fecha: 2026-10-29 16:37
+Ventas con estimacion confiable: 9,203. En el presupuesto (USD 80,000 a 200,000): 5,198
+    fuera del soporte del modelo (celda tipo x tramo con menos de 30 alquileres): 714, {'ph': 619, 'casa': 95}
+    universo de la decision: 4,484
+
+============================================================================
+P1: COMPRAR O NO COMPRAR
+============================================================================
+Criterio: neta del extremo inferior > techo de la banda (7.60%) + margen por liquidez (0.00 pp)
+    pasan: 18 de 4,484 (0.4%)
+    con costos de entrada (TIR pesimista a 5 anios): 4
+    sin el filtro de soporte habrian pasado: 84
+    neta pesimista mediana del universo: 4.12%; central: 5.38%
+    las que pasan: m2 de venta = 0.69 del mediano de su celda barrio x tramo (mediana); barrios {'balvanera': 5, 'flores': 3, 'san cristobal': 2, 'parque chacabuco': 2, 'villa crespo': 1, 'monserrat': 1, 'saavedra': 1, 'constitucion': 1, 'caballito': 1, 'san nicolas': 1}
+
+============================================================================
+P2: QUE PROPIEDAD
+============================================================================
+Pares con bandas que no se superponen: 7.2%
+    dentro del mismo tramo de superficie: 5.2%
+    dentro del mismo barrio: 3.7%
+Frontera (ninguna otra la supera): 140 propiedades
+    ancho mediano de la banda de neta: 2.67 pp
+    la de mayor neta central (15.39%) supera con claridad al 94.4% del universo
+
+============================================================================
+P3: TRADICIONAL O TEMPORAL
+============================================================================
+Celdas barrio x dormitorios: 47. Ocupacion de equilibrio mediana: 65.5% (autogestionado 51.7%)
+    gana el temporal con la ocupacion de Inside Airbnb: 0; con 53%: 2
+
+============================================================================
+SENSIBILIDAD
+============================================================================
+           parametro  vacancia  gastos_sin_abl             abl entrada  umbral  margen  n_p1  n_p1_con_entrada  jaccard_p1_vs_base  n_frontera_p2  jaccard_frontera_vs_base  pares_distinguibles_pct
+                base      5.88           10.24      segmentado    base     7.6     0.0    18                 4               1.000            140                     1.000                     7.28
+            vacancia      4.00           10.24      segmentado    base     7.6     0.0    23                 4               0.783            140                     1.000                     7.28
+            vacancia      6.00           10.24      segmentado    base     7.6     0.0    18                 4               1.000            140                     1.000                     7.28
+            vacancia      8.00           10.24      segmentado    base     7.6     0.0    16                 4               0.889            140                     1.000                     7.28
+            vacancia     10.00           10.24      segmentado    base     7.6     0.0    12                 3               0.667            140                     1.000                     7.28
+            vacancia     12.00           10.24      segmentado    base     7.6     0.0    10                 3               0.556            140                     1.000                     7.28
+      gastos sin ABL      5.88            8.24      segmentado    base     7.6     0.0    23                 4               0.783            138                     0.986                     7.29
+      gastos sin ABL      5.88           10.24      segmentado    base     7.6     0.0    18                 4               1.000            140                     1.000                     7.28
+      gastos sin ABL      5.88           12.24      segmentado    base     7.6     0.0    16                 3               0.889            140                     1.000                     7.26
+                 ABL      5.88           10.24           plano    base     7.6     0.0    20                 4               0.900             92                     0.657                     8.14
+                 ABL      5.88           10.24      segmentado    base     7.6     0.0    18                 4               1.000            140                     1.000                     7.28
+                 ABL      5.88           10.24 segmentado_tope    base     7.6     0.0    15                 4               0.833            128                     0.914                     7.00
+   costos de entrada      5.88           10.24      segmentado     sin     7.6     0.0    18                24               1.000            140                     1.000                     7.28
+   costos de entrada      5.88           10.24      segmentado    base     7.6     0.0    18                 4               1.000            140                     1.000                     7.28
+   costos de entrada      5.88           10.24      segmentado    alto     7.6     0.0    18                 3               1.000            140                     1.000                     7.28
+    banda de retorno      5.88           10.24      segmentado    base     7.1     0.0    33                 5               0.545            140                     1.000                     7.28
+    banda de retorno      5.88           10.24      segmentado    base     7.6     0.0    18                 4               1.000            140                     1.000                     7.28
+ margen por liquidez      5.88           10.24      segmentado    base     7.6     0.0    18                 4               1.000            140                     1.000                     7.28
+ margen por liquidez      5.88           10.24      segmentado    base     7.6     0.5    10                 3               0.556            140                     1.000                     7.28
+ margen por liquidez      5.88           10.24      segmentado    base     7.6     1.0     6                 2               0.333            140                     1.000                     7.28
+   extremo favorable      4.00            8.24           plano     sin     7.1     0.0    51                57               0.353             92                     0.657                     8.14
+extremo desfavorable     12.00           12.24 segmentado_tope    alto     7.6     1.0     3                 0               0.167            129                     0.921                     6.98
+
+P3, gestion tercerizada y vacancia base: celdas donde gana el temporal por ocupacion sostenible
+    20%: 0, 30%: 0, 40%: 0, 50%: 0, 60%: 11, 70%: 35, 80%: 46, 53%: 2
+
+Archivos: data/processed/dataset_analitico.csv (12,097 x 128), data/processed/decision_sensibilidad.csv, data/processed/decision_p3.csv

@@ -1,10 +1,10 @@
 # Guía de datos para el tablero
 
-Para quien arma el tablero en Power BI. El archivo es `dataset_analitico.csv`, de 128
-columnas, y casi todo lo que el tablero necesita ya viene calculado: **conviene no
-recalcular nada adentro del `.pbix`**. Si un número del tablero no coincide con el
-informe, el error está en el tablero. El significado completo de cada columna está en
-`DICCIONARIO_DATOS.md`.
+Para quien arma el tablero en Streamlit. El archivo es `dataset_analitico.csv`, de 128
+columnas, y casi todo lo que el tablero necesita ya viene calculado: **conviene que la
+app solo filtre y muestre, sin recalcular KPIs**. Si un número del tablero no coincide
+con el informe, el error está en el tablero. El significado completo de cada columna está
+en `DICCIONARIO_DATOS.md`.
 
 ## El propósito, en una frase
 
@@ -14,9 +14,44 @@ Todo filtro o gráfico que no sirva a esa pregunta sobra.
 
 ## Cómo leer el archivo
 
-- CSV UTF-8 **con BOM** (`utf-8-sig`), separador coma y decimal **punto**. En Power BI hay
-  que importarlo con configuración regional inglesa (en-US), o los decimales se leen
-  como miles.
+El archivo pesa 30 MB y pandas lo lee en menos de un segundo. Con `st.cache_data` se lee
+una sola vez:
+
+```python
+import sys
+import pandas as pd
+import streamlit as st
+
+sys.path.insert(0, "src")          # la app corre desde la raiz de Entrega 3/
+import eda
+import supuestos as S
+
+BOOLEANAS = ["en_presupuesto", "en_soporte_modelo", "universo_decision",
+             "p1_comprar", "p1_comprar_con_entrada", "p2_no_dominada"]
+
+@st.cache_data
+def cargar(columnas):
+    df = pd.read_csv("data/processed/dataset_analitico.csv", encoding="utf-8-sig",
+                     usecols=columnas, low_memory=False)
+    df = df[(df["operacion"] == "venta") & (df["estimacion_confiable"] == 1)]
+    for c in BOOLEANAS:
+        if c in df:
+            df[c] = df[c].fillna(False).astype(bool)
+    return df
+```
+
+- **`encoding="utf-8-sig"`**: el CSV tiene BOM. Sin eso, la primera columna se llama
+  `﻿id_aviso`.
+- **`usecols`** con las columnas de la tabla de abajo, más `operacion` y
+  `estimacion_confiable`, que usa el filtro: deja afuera los textos largos, que son la
+  mayor parte del peso.
+- **Las booleanas tienen nulos** en las filas donde no aplican (alquileres, ventas sin
+  estimación confiable), así que pandas las lee como texto. El `fillna(False)` las
+  vuelve booleanas.
+- **No copiar números a mano en la app.** La banda de retorno sale de
+  `S.RETORNO_MINIMO_BANDA` (7,10% a 7,60%) y el presupuesto de `S.PRESUPUESTO_USD`. El
+  nombre de cada barrio para mostrar, con tildes, sale de `eda.nombre_barrio(barrio)`:
+  en el dataset están en minúscula y sin tildes, porque así se unen con las otras fuentes.
 - Una fila por aviso. Para todo lo de rentabilidad: **`operacion = "venta"` y
   `estimacion_confiable = 1`**, que son 9.203 filas.
 - Para las recomendaciones: **`universo_decision = True`**, que son 4.484 propiedades
@@ -43,7 +78,7 @@ La vara de comparación es la **banda de retorno mínimo: 7,10% a 7,60%** anual 
 dólares (ON de YPF 2031 y Pampa 2037). Conviene fijarla como línea de referencia en todos
 los gráficos de rentabilidad, no como un filtro.
 
-Tablas chicas que sirven tal cual:
+Tablas chicas que sirven tal cual (se leen igual, con `utf-8-sig`):
 
 | Archivo | Para qué |
 |---|---|

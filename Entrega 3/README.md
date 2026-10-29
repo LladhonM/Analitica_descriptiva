@@ -194,7 +194,7 @@ fecha, en lugar de copiarse.
 | 5 | Costos de entrada, refacción, liquidez y riesgo legal, con fuente y fecha en `supuestos.py` | Devolución, prioridad 5 | Hecho: entrada y refacción con fuente; riesgo legal como limitación declarada. La liquidez sigue siendo la del tiempo de publicación de IDECBA (ficha 5 del catálogo) |
 | 6 | Síntesis de atributos (PCA/MCA) y micro-mercados | Plan de la 2da entrega | Hecho, como análisis informativo: no entra al modelo (ver [Síntesis de atributos](#síntesis-de-atributos-y-micro-mercados)) |
 | 7 | Revisión del modelo de alquiler con las variables espaciales y contra una referencia simple | Plan de la 2da entrega; devolución | Hecho (ver [Modelo de alquiler](#modelo-de-alquiler)) |
-| 8 | Tablero para el inversor (Power BI) | Consigna de la 3ra entrega | A cargo de otro integrante del grupo. De este lado está hecho el insumo: el dataset final, el diccionario y [`GUIA_TABLERO.md`](data/processed/GUIA_TABLERO.md) |
+| 8 | Tablero para el inversor (Streamlit) | Consigna de la 3ra entrega | A cargo de otro integrante del grupo. De este lado está hecho el insumo: el dataset final, el diccionario y [`GUIA_TABLERO.md`](data/processed/GUIA_TABLERO.md) |
 | 9 | Depuración del repositorio: código sin uso, referencias a versiones anteriores, versiones fijas, tests independientes del directorio | Devolución, prioridad 6 | Hecho (ver [Procedencia](#procedencia-de-cada-archivo)) |
 | 10 | Informe de hallazgos con lo nuevo, conservando solo lo que cambia la decisión | Devolución, prioridad 7 | Hecho ([`informe/INFORME_HALLAZGOS.md`](informe/INFORME_HALLAZGOS.md)) |
 

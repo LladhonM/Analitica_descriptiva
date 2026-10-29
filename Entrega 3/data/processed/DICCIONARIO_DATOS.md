@@ -1,10 +1,12 @@
 # Diccionario de datos — `dataset_analitico.csv`
 
-Matriz final del pipeline: **12.097 filas × 114 columnas**, una fila por aviso
+Matriz final del pipeline: **12.097 filas × 128 columnas**, una fila por aviso
 residencial de RE/MAX en CABA (10.749 en venta y 1.348 en alquiler), con las variables
-curadas, las extraídas del texto, las de accesibilidad, los cuatro KPIs materializados y
-los costos del propietario. Esta entrega suma las 8 columnas de la sección 9, las 7 de
-la sección 8.1 y los percentiles 10 y 90 del alquiler. Cambian tres de la 2da:
+curadas, las extraídas del texto, las de accesibilidad, los cuatro KPIs materializados,
+los costos del propietario y la función de decisión. Esta entrega suma las 8 columnas de
+la sección 9, las 7 de la sección 8.1, las 14 de la sección 10 y los percentiles 10 y 90
+del alquiler. Para armar el tablero, `GUIA_TABLERO.md` dice qué columnas usar y cuáles
+son internas del pipeline. Cambian tres de la 2da:
 `rent_neta_pct` usa el ABL de cada propiedad, y `rent_bruta_min` y `rent_bruta_max`
 salen de esos percentiles. Sale `error_estimacion`, la banda anterior.
 
@@ -14,7 +16,7 @@ salen de esos percentiles. Sale `error_estimacion`, la banda anterior.
 | Fuente primaria | API JSON pública de RE/MAX Argentina (listado `findAll` y ficha `findBySlug`), scrapeada en la 1ra entrega |
 | Fecha de captura | 16 de agosto de 2026, hora argentina (`fecha_scraping` está en UTC y cruza al 17) |
 | Origen en disco | `data/raw/dataset_maestro.csv` (14.867 avisos × 55 columnas) |
-| Generado por | `src/limpieza.py --tc 1500` → `src/variables.py` → `src/espacial.py` → `src/kpis.py` |
+| Generado por | `src/limpieza.py --tc 1500` → `src/variables.py` → `src/espacial.py` → `src/kpis.py` → `src/temporal.py` → `src/decision.py` |
 | Codificación | CSV UTF-8 con BOM (`utf-8-sig`), separador coma, decimal punto |
 | Tipo de cambio | **ARS 1.500 por USD**, fijo para todo el dataset (el implícito en los alquileres publicados es 1.110) |
 
@@ -47,8 +49,10 @@ dataset_maestro.csv  (14.867 × 55)
   │ variables.py  RegEx sobre título + descripción + detalles → 35 dummies + 5 de estructura
   │ espacial.py   distancia a subte, tren, Metrobús, plazas y parques → 8 de accesibilidad
   │ kpis.py       modelo Ridge de alquiler → 4 KPIs; ABL, costos de entrada y TIR (costos.py)
+  │ temporal.py   tradicional contra temporal por barrio × dormitorios (no agrega columnas)
+  │ decision.py   P1, P2 y P3 → 14 columnas de la decisión, sobre el mismo archivo
   ▼
-dataset_analitico.csv  (12.097 × 114)
+dataset_analitico.csv  (12.097 × 128)
 ```
 
 ---
@@ -276,6 +280,30 @@ limitaciones están en `informe/FUENTES_EXTERNAS.md` (fichas 6 a 9).
 | `dist_plaza_m` | Distancia al borde de la plaza o parque más cercano | Decimal | Metros | Derivada, `espacial.py`; capa de espacios verdes públicos | Excluye canteros centrales y espacios de menos de 1.000 m². El borde se aproxima con los vértices del polígono en una grilla de 4 decimales (error menor a 7 m) |
 | `dist_parque_m` | Distancia al borde del parque más cercano | Decimal | Metros | Ídem | Solo espacios de 1 hectárea o más. Nunca es menor que `dist_plaza_m` |
 
+## 10. Función de decisión (`decision.py`)
+
+Las tres decisiones del inversor (README, sección Función de decisión). Existen para las
+ventas con `estimacion_confiable == 1` y banda de alquiler; en el resto de las filas el
+nulo es estructural. Las booleanas se guardan como `True`/`False`. Los criterios y sus
+umbrales están en `supuestos.py`, secciones 4 y 4d.
+
+| Variable | Significado | Tipo | Unidad | Fuente | Transformaciones |
+|---|---|---|---|---|---|
+| `en_presupuesto` | La propiedad cuesta entre USD 80.000 y 200.000 | Booleana | — | Derivada, `decision.py` | `venta_usd` dentro de `PRESUPUESTO_USD` |
+| `n_alq_celda_tipo` | Alquileres observados en la celda tipo × tramo de superficie de la propiedad | Entero | Conteo | Derivada, `decision.py` | Cuenta los alquileres del dataset con el mismo `tipo_familia` y `superficie_rango` |
+| `en_soporte_modelo` | El modelo de alquiler tiene datos suficientes para ese tipo y tamaño | Booleana | — | Derivada, `decision.py` | `n_alq_celda_tipo ≥ 30` (`MIN_ALQ_SOPORTE`). Deja afuera a todas las casas y los PH: hay 14 y 44 alquileres observados de cada uno |
+| `universo_decision` | La propiedad entra a las recomendaciones | Booleana | — | Derivada, `decision.py` | `en_presupuesto` y `en_soporte_modelo`. 4.484 propiedades |
+| `neta_min_pct` | Rentabilidad neta del escenario pesimista | Decimal | % anual | Derivada, `decision.py` | La fórmula de `rent_neta_pct` con `alquiler_p10_usd_mes`: misma vacancia, 10,24% de gastos y el ABL de la propiedad en pesos, que sobre un alquiler más bajo pesa más |
+| `neta_max_pct` | Rentabilidad neta del escenario optimista | Decimal | % anual | Ídem | Ídem, con `alquiler_p90_usd_mes` |
+| `tir_5a_min_pct` | TIR a 5 años del escenario pesimista, con costos de entrada | Decimal | % anual | Derivada, `decision.py` | Como `tir_5a_pct`, con el alquiler del percentil 10 (en las unidades a reciclar, escalado por la suba post-refacción) |
+| `p1_comprar` | **P1**: se recomienda comprar | Booleana | — | Derivada, `decision.py` | `universo_decision` y `neta_min_pct > 7,60` (techo de la banda de retorno + margen por liquidez de 0) |
+| `p1_comprar_con_entrada` | **P1, versión estricta**: también con costos de entrada | Booleana | — | Ídem | `universo_decision` y `tir_5a_min_pct > 7,60` |
+| `p2_no_dominada` | **P2**: ninguna otra propiedad del universo la supera con claridad | Booleana | — | Derivada, `decision.py` | `neta_max_pct ≥` la mayor `neta_min_pct` del universo. Dentro de este grupo ninguna se distingue de otra por rentabilidad |
+| `m2_relativo_celda` | Precio del m² contra el mediano de su barrio y tramo de superficie | Decimal | Veces (1 = el mediano) | Derivada, `decision.py` | `venta_m2_usd /` mediana de las ventas de su celda. Por debajo de 0,7, verificar por qué es barata |
+| `dias_publicacion_ambientes` | Días que pasa publicado un aviso de esa cantidad de ambientes | Decimal | Días | IDECBA, `estadistica_ciudad_tiempo_publicacion.csv` | Último trimestre; 5 o más ambientes agrupados. Es de toda la Ciudad: no distingue barrio ni propiedad |
+| `p3_ocupacion_equilibrio_pct` | **P3**: ocupación con la que el alquiler temporal empata al tradicional en su barrio y dormitorios | Decimal | % del año | Derivada, `temporal.py` | Gestión tercerizada. Nulo si la celda barrio × dormitorios no tiene datos suficientes de Airbnb o de RE/MAX |
+| `p3_ocupacion_airbnb_pct` | Ocupación que estima Inside Airbnb para su celda | Decimal | % del año | Inside Airbnb, `airbnb_barrio_dormitorios.csv` | Estimación a partir de reseñas, no un dato observado. Nulo como la anterior |
+
 ---
 
 ## Advertencias de uso
@@ -309,3 +337,7 @@ limitaciones están en `informe/FUENTES_EXTERNAS.md` (fichas 6 a 9).
 9. **`tir_5a_pct` supone que la unidad se revende al mismo precio en dólares.** No
    estima apreciación ni descuenta costos de salida, meses de obra sin alquiler ni
    riesgo legal.
+10. **`p2_no_dominada` no es un ranking.** Marca un grupo de propiedades que no se
+    distinguen entre sí. Ordenarlas por `rent_neta_pct` reintroduce una precisión que el
+    dato no tiene; el desempate que informa es el ancho de la banda
+    (`neta_max_pct − neta_min_pct`).

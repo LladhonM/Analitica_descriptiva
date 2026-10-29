@@ -25,7 +25,9 @@ Sobre esa base ya están hechas:
   suman la TIR a 5 años (ver [Costos del propietario](#costos-del-propietario-antes-y-después));
 - la **revisión del modelo de alquiler** y la banda cuantílica del KPI 4 (ver
   [Modelo de alquiler](#modelo-de-alquiler));
-- los **tests formales de H1 a H4** (ver [Hipótesis](#hipótesis-los-tests-formales)).
+- los **tests formales de H1 a H4** (ver [Hipótesis](#hipótesis-los-tests-formales));
+- la **síntesis de atributos (PCA y MCA) y los micro-mercados**, como análisis
+  informativo que no entra al modelo (ver [Síntesis de atributos](#síntesis-de-atributos-y-micro-mercados)).
 
 El dataset con estas columnas es la base del tablero. La revisión del modelo no cambió
 el alquiler estimado, así que los KPIs 1 a 3 quedan fijos; el KPI 4 sí cambió. El resto
@@ -46,7 +48,8 @@ salidas, así que se leen sin ejecutar nada.
 | [`02_costos_del_propietario`](notebooks/02_costos_del_propietario.ipynb) | ¿Cuánto le queda al inversor después de los costos, y le gana a una ON? ABL segmentado, costos de entrada, TIR, refacción y sensibilidad | 04 y 05 |
 | [`03_modelo_alquiler`](notebooks/03_modelo_alquiler.ipynb) | ¿Cuánto se puede confiar en el alquiler estimado? Comparación contra una referencia, qué paga el mercado y la banda del KPI 4 | 06 a 08 |
 | [`04_validacion`](notebooks/04_validacion.ipynb) | ¿Qué hipótesis se sostienen con un contraste formal, con qué magnitud, y cuáles cambian la decisión? | 09 y 10 |
-| `05_decision` | La función de decisión para P1 a P3 | por hacer |
+| [`05_sintesis_atributos`](notebooks/05_sintesis_atributos.ipynb) | ¿Se pueden resumir los 29 atributos del aviso en pocos ejes, y hay tipos de propiedad que rinden distinto en el mismo barrio y tamaño? PCA, MCA, micro-mercados y por qué no entran al modelo | 11 y 12 |
+| `06_decision` | La función de decisión para P1 a P3 | por hacer |
 
 La limpieza, la minería de texto y el EDA de la 2da entrega no se repiten: están en sus
 notebooks 01 a 03, y esta carpeta parte de su resultado.
@@ -133,7 +136,10 @@ y conserva solo los gráficos y hallazgos que cambian la decisión del inversor.
 | `src/validacion.py` | Las piezas de los tests formales: Spearman por permutación, Holm, errores agrupados, Van Elteren y la pendiente con efectos fijos de celda con su bootstrap |
 | `src/test_validacion.py` | 19 tests de esas piezas contra oráculos independientes (scipy, la regresión con dummies, HC1), con negativos |
 | `notebooks/04_validacion.ipynb` | Los tests formales de H1 a H4 |
-| `graficos/01` a `10` | Los gráficos que guardan los notebooks |
+| `src/sintesis.py` | PCA sobre las dummies, MCA con la corrección de Benzécri, micro-mercados por k-medias con su estabilidad, y la prima de cada grupo con precios observados |
+| `src/test_sintesis.py` | 18 tests: el MCA contra el chi-cuadrado de scipy y la fórmula de transición, los micro-mercados contra grupos plantados y la prima contra una prima plantada, con negativos |
+| `notebooks/05_sintesis_atributos.ipynb` | La síntesis de atributos y los micro-mercados |
+| `graficos/01` a `12` | Los gráficos que guardan los notebooks |
 | `data/external/transporte_estaciones.csv` | Bocas de subte, estaciones de tren y paradas de Metrobús, con fuente y fecha de descarga |
 | `data/external/espacios_verdes.csv`, `espacios_verdes_vertices.csv` | Plazas y parques, y los vértices de sus polígonos |
 | `data/processed/reporte_espacial.txt` | Log de `espacial.py`: capas, cobertura del dato, distancias, acceso por comuna y heterogeneidad por barrio |
@@ -152,7 +158,7 @@ fecha, en lugar de copiarse.
 | 3 | Función de decisión prescriptiva para P1 (comprar o no), P2 (qué propiedad) y P3 (tradicional o temporal), **implementada y evaluada** | Devolución, prioridad 3; consigna de la 3ra entrega | Pendiente |
 | 4 | ABL segmentado por barrio, superficie y tipo de propiedad, y su efecto sobre la rentabilidad neta | Devolución, prioridad 4 | Hecho (ver [Costos del propietario](#costos-del-propietario-antes-y-después)) |
 | 5 | Costos de entrada, refacción, liquidez y riesgo legal, con fuente y fecha en `supuestos.py` | Devolución, prioridad 5 | Hecho: entrada y refacción con fuente; riesgo legal como limitación declarada. La liquidez sigue siendo la del tiempo de publicación de IDECBA (ficha 5 del catálogo) |
-| 6 | Síntesis de atributos (PCA/MCA) y micro-mercados | Plan de la 2da entrega | Pendiente |
+| 6 | Síntesis de atributos (PCA/MCA) y micro-mercados | Plan de la 2da entrega | Hecho, como análisis informativo: no entra al modelo (ver [Síntesis de atributos](#síntesis-de-atributos-y-micro-mercados)) |
 | 7 | Revisión del modelo de alquiler con las variables espaciales y contra una referencia simple | Plan de la 2da entrega; devolución | Hecho (ver [Modelo de alquiler](#modelo-de-alquiler)) |
 | 8 | Tablero para el inversor (Power BI) | Consigna de la 3ra entrega | Pendiente |
 | 9 | Depuración del repositorio: código sin uso, referencias a versiones anteriores, versiones fijas, tests independientes del directorio | Devolución, prioridad 6 | Hecho (ver [Procedencia](#procedencia-de-cada-archivo)) |
@@ -518,6 +524,62 @@ son independientes. H4 usa solo antigüedad observada. Las piezas estadísticas 
 
 ---
 
+## Síntesis de atributos y micro-mercados
+
+El plan de la 2da entrega dejó para esta "PCA/MCA sobre las dummies y clustering de
+propiedades". Desarrollo completo en el [notebook 05](notebooks/05_sintesis_atributos.ipynb).
+
+**Los ejes.** PCA sobre las 29 dummies físicas del aviso, y MCA sobre las mismas más tipo,
+tramo de superficie, tramo de antigüedad y disposición. Los dos métodos encuentran los
+mismos ejes. Con la corrección de Benzécri, tres resumen el 98% de la inercia:
+
+| Eje | Inercia corregida | Qué es | Contra lo que el dataset ya tiene |
+|---|---|---|---|
+| D1 | 70% | Edificio nuevo con amenities | Correlación 0,95 con `n_amenities` |
+| D2 | 21% | Tamaño y categoría | 0,86 con el logaritmo de la superficie |
+| D3 | 7% | PH o casa contra departamento clásico | 0,56 con ser PH o casa |
+
+**Los micro-mercados.** k-medias sobre esos tres ejes da cuatro grupos muy estables (ARI
+de 0,98 o más en submuestras del 80%), que conviven dentro de casi todos los barrios:
+
+| Micro-mercado | Avisos | m² de venta mediano | Bruta mediana |
+|---|---|---|---|
+| Departamento estándar: 47 m², edificio viejo, casi sin amenities | 47% | USD 1.907 | 7,2% |
+| Torre con amenities: 2 años de antigüedad, casi la mitad a estrenar o en pozo | 19% | USD 2.774 | 6,2% |
+| Departamento clásico grande: 92 m², con dependencia y cochera | 18% | USD 2.122 | 6,6% |
+| PH y casas: 166 m², con patio | 16% | USD 1.207 | 8,8% |
+
+**El hallazgo, con precios observados.** Contra un departamento estándar del mismo barrio,
+tamaño y tipo, la torre con amenities cuesta **33% más por m²** (IC 95% [30, 37]) y se
+alquila solo **17% más** (IC 95% [12, 23]): rinde alrededor de 0,9 puntos menos. Se mide
+con precios y alquileres publicados, no con la rentabilidad estimada, porque el numerador
+de esa rentabilidad sale de un modelo que ya usa estas dummies. Precisa el hallazgo de la
+2da entrega: lo que rinde menos es el paquete "edificio nuevo con amenities", no solo la
+amenity.
+
+**Por qué no entra al modelo de alquiler.** Se probó con la validación del
+[notebook 03](notebooks/03_modelo_alquiler.ipynb). La tabla muestra la peor de las tres
+semillas:
+
+| Variante | Mejora de R² sobre el Ridge vigente |
+|---|---|
+| 3 componentes en lugar de las 14 dummies | −0,0075 |
+| Ridge vigente + 3 componentes | +0,0059 |
+| Ridge vigente + micro-mercado | +0,0008 |
+| Las 29 dummies, como techo | +0,0082 |
+
+Ninguna variante alcanza el 0,01 de `supuestos.MEJORA_MINIMA_R2`, que es el mismo
+criterio que dejó afuera a las variables espaciales. Además:
+
+- reemplazar las dummies por componentes pierde R² y la lectura de los coeficientes como
+  cuánto paga el mercado por cada característica;
+- los ejes y los grupos se arman con variables que el modelo ya tiene.
+
+**Queda como análisis informativo.** No cambia el alquiler estimado, los KPIs ni el
+dataset.
+
+---
+
 ## Reproducir
 
 Python 3.13. Desde esta carpeta:
@@ -541,6 +603,7 @@ py src/test_costos.py                    # ABL, costos de entrada y TIR
 py src/test_accesibilidad.py             # método de H2, sobre datos sintéticos
 py src/test_modelo.py                    # banda cuantílica y metadata del modelo
 py src/test_validacion.py                # piezas de los tests formales, sin datos
+py src/test_sintesis.py                  # PCA, MCA y micro-mercados, sin datos
 ```
 
 Los siete primeros scripts reconstruyen `data/processed/` a partir de
@@ -555,6 +618,7 @@ py -m nbconvert --to notebook --execute --inplace 01_accesibilidad.ipynb
 py -m nbconvert --to notebook --execute --inplace 02_costos_del_propietario.ipynb
 py -m nbconvert --to notebook --execute --inplace 03_modelo_alquiler.ipynb
 py -m nbconvert --to notebook --execute --inplace 04_validacion.ipynb   # unos 2 minutos
+py -m nbconvert --to notebook --execute --inplace 05_sintesis_atributos.ipynb   # 1 minuto
 ```
 
 Los notebooks necesitan `dataset_espacial.csv` (el 03 lee de ahí los alquileres para la
@@ -594,8 +658,8 @@ Entrega 3/
 │   ├── external/       tablas fechadas de las fuentes externas y capas espaciales
 │   └── reference/      ranking de barrios de la 1ra entrega, para comparar
 ├── informe/            FUENTES_EXTERNAS.md
-├── notebooks/          01 accesibilidad, 02 costos, 03 modelo, 04 validación (en orden de lectura)
-├── graficos/           los 10 gráficos que guardan los notebooks
+├── notebooks/          01 accesibilidad, 02 costos, 03 modelo, 04 validación, 05 síntesis (en orden de lectura)
+├── graficos/           los 12 gráficos que guardan los notebooks
 ├── src/                pipeline, supuestos y tests
 ├── requirements.txt
 └── README.md

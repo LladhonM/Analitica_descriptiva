@@ -197,22 +197,6 @@ def resumen_robusto(df: pd.DataFrame, columnas: list) -> pd.DataFrame:
     return pd.DataFrame(filas).set_index("variable").round(2)
 
 
-def leer_asimetria(valor: float) -> str:
-    """Traduce el coeficiente de asimetria a una frase."""
-    # Con NaN todas las comparaciones dan False y la funcion caia al ultimo
-    # caso, "asimetria fuerte": afirmaba una forma sobre una variable sin datos.
-    if valor is None or pd.isna(valor):
-        return "sin dato: no hay valores suficientes para medir la asimetria"
-    a = abs(valor)
-    lado = "derecha" if valor > 0 else "izquierda"
-    if a < 0.5:
-        return "practicamente simetrica: la media es un buen resumen"
-    if a < 1:
-        return f"asimetria moderada hacia la {lado}"
-    return (f"asimetria fuerte hacia la {lado}: la media queda desplazada "
-            f"y hay que leer la mediana")
-
-
 # El dataset guarda los barrios en minuscula y sin tildes porque asi los
 # normaliza la limpieza, y asi tienen que quedar para que los joins funcionen.
 # Para mostrarlos en un texto o en un eje hace falta el nombre oficial. Estas
@@ -304,15 +288,6 @@ def matriz_correlacion(df: pd.DataFrame, columnas: list,
 # comparan dentro de celdas de propiedades semejantes (un "estrato") y recien
 # despues agregan.
 
-def cobertura_estratos(df: pd.DataFrame, estrato: list, minimo: int) -> dict:
-    """Cuantas celdas del estrato llegan al minimo y que parte de las filas cubren."""
-    n = df.groupby(estrato, observed=True).size()
-    validas = n[n >= minimo]
-    return {"celdas": int(len(n)), "celdas_validas": int(len(validas)),
-            "filas": int(len(df)), "filas_cubiertas": int(validas.sum()),
-            "pct_cubierto": float(validas.sum() / len(df) * 100) if len(df) else np.nan}
-
-
 def mediana_ponderada(valores, pesos) -> float:
     """Mediana ponderada: el valor que deja la mitad del peso a cada lado."""
     v = np.asarray(valores, dtype=float)
@@ -350,17 +325,3 @@ def efecto_estratificado(df: pd.DataFrame, grupo: str, respuesta: str,
                           "diferencia": uno.median() - cero.median(),
                           "peso": min(len(uno), len(cero))})
     return pd.DataFrame(filas)
-
-
-def resumir_efecto(tabla: pd.DataFrame, filas_totales: int) -> dict:
-    """Resumen de efecto_estratificado: centro, dispersion, signo y cobertura."""
-    if tabla.empty:
-        return {"celdas": 0, "mediana_ponderada": np.nan, "p25": np.nan, "p75": np.nan,
-                "pct_celdas_negativas": np.nan, "pct_filas_cubiertas": 0.0}
-    d = tabla["diferencia"]
-    return {"celdas": len(tabla),
-            "mediana_ponderada": mediana_ponderada(d, tabla["peso"]),
-            "p25": float(d.quantile(.25)), "p75": float(d.quantile(.75)),
-            "pct_celdas_negativas": float((d < 0).mean() * 100),
-            "pct_filas_cubiertas": float((tabla["n_1"] + tabla["n_0"]).sum()
-                                         / filas_totales * 100)}

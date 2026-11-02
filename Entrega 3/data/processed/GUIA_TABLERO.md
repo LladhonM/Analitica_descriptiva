@@ -1,6 +1,6 @@
 # Guía de datos para el tablero
 
-Para quien arma el tablero en Streamlit. El archivo es `dataset_analitico.csv`, de 128
+Para quien arma el tablero en Streamlit, que vive en `tablero/`. El archivo es `dataset_analitico.csv`, de 128
 columnas, y casi todo lo que el tablero necesita ya viene calculado: **conviene que la
 app solo filtre y muestre, sin recalcular KPIs**. Si un número del tablero no coincide
 con el informe, el error está en el tablero. El significado completo de cada columna está
@@ -14,30 +14,32 @@ Todo filtro o gráfico que no sirva a esa pregunta sobra.
 
 ## Cómo leer el archivo
 
-El archivo pesa 30 MB y pandas lo lee en menos de un segundo. Con `st.cache_data` se lee
-una sola vez:
+El archivo pesa 30 MB y pandas lo lee en menos de un segundo. La carga está en
+`tablero/datos.py`, y `tablero/app.py` la envuelve con `st.cache_data` para leerla una sola
+vez. Las rutas salen de la ubicación de `datos.py`, así que no dependen de la carpeta desde
+donde se corre la app:
 
 ```python
-import sys
-import pandas as pd
-import streamlit as st
-
-sys.path.insert(0, "src")          # la app corre desde la raiz de Entrega 3/
+# tablero/datos.py (resumen)
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # Entrega 3/
+sys.path.insert(0, os.path.join(RAIZ, "src"))
 import eda
 import supuestos as S
 
-BOOLEANAS = ["en_presupuesto", "en_soporte_modelo", "universo_decision",
-             "p1_comprar", "p1_comprar_con_entrada", "p2_no_dominada"]
+DATASET = os.path.join(RAIZ, "data", "processed", "dataset_analitico.csv")
 
-@st.cache_data
-def cargar(columnas):
-    df = pd.read_csv("data/processed/dataset_analitico.csv", encoding="utf-8-sig",
-                     usecols=columnas, low_memory=False)
-    df = df[(df["operacion"] == "venta") & (df["estimacion_confiable"] == 1)]
+def cargar(ruta=DATASET):
+    df = pd.read_csv(ruta, encoding="utf-8-sig", usecols=COLUMNAS, low_memory=False)
+    df = df[(df["operacion"] == "venta") & (df["estimacion_confiable"] == 1)].copy()
     for c in BOOLEANAS:
-        if c in df:
-            df[c] = df[c].fillna(False).astype(bool)
-    return df
+        df[c] = df[c].fillna(False).astype(bool)
+    df["barrio_nombre"] = df["barrio"].map(eda.nombre_barrio)
+    return df.reset_index(drop=True)
+
+# tablero/app.py
+@st.cache_data
+def cargar():
+    return T.cargar()
 ```
 
 - **`encoding="utf-8-sig"`**: el CSV tiene BOM. Sin eso, la primera columna se llama

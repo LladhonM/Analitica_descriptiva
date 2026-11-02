@@ -1,0 +1,11 @@
+# Tema del tablero (DISENO_TABLERO.md, seccion 1). Streamlit lee este archivo
+# desde la carpeta en la que se ejecuta: correr `streamlit run app.py` desde tablero/.
+[theme]
+base = "light"
+primaryColor = "#30343F"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#E8EEF7"
+textColor = "#30343F"
+
+[browser]
+gatherUsageStats = false

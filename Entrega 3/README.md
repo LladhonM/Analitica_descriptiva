@@ -713,6 +713,7 @@ py src/test_modelo.py                    # banda cuantílica y metadata del mode
 py src/test_validacion.py                # piezas de los tests formales, sin datos
 py src/test_sintesis.py                  # PCA, MCA y micro-mercados, sin datos
 py src/test_decision.py                  # función de decisión
+py tablero/test_tablero.py               # carga, filtros y medianas del tablero
 ```
 
 Los diez primeros scripts reconstruyen `data/processed/` y el informe a partir de
@@ -761,6 +762,18 @@ cambia, cambió el pipeline o una dependencia:
 | Frontera de P2 | 140 propiedades; 7,2% de pares distinguibles | nueva |
 | `dataset_analitico.csv` | 12.097 × 128 | 98 columnas en la 2da |
 
+### Tablero
+
+```bash
+cd tablero
+streamlit run app.py
+```
+
+Se corre desde `tablero/` porque Streamlit lee el tema de `tablero/.streamlit/config.toml`
+en la carpeta desde donde se ejecuta. Lee `data/processed/dataset_analitico.csv`, que se
+versiona, así que no hace falta correr el pipeline antes. Sin filtros (todo el rango de
+precios y todos los tipos) reproduce las cifras de la tabla de arriba.
+
 ---
 
 ## Estructura
@@ -776,8 +789,8 @@ Entrega 3/
 ├── notebooks/          01 accesibilidad, 02 costos, 03 modelo, 04 validación, 05 síntesis, 06 decisión (en orden de lectura)
 ├── graficos/           los 15 gráficos que guardan los notebooks
 ├── src/                pipeline, supuestos y tests
+├── tablero/            tablero en Streamlit: app.py, datos.py, test_tablero.py y el tema
 ├── requirements.txt
 └── README.md
 ```
 
-La carpeta del tablero se agrega cuando se crea.

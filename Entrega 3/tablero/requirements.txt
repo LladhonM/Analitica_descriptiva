@@ -1,0 +1,11 @@
+# Dependencias del tablero, para Streamlit Community Cloud: busca este archivo en la carpeta
+# de app.py (y despues en la raiz del repo), no en Entrega 3/. Las versiones son las mismas
+# de Entrega 3/requirements.txt: si cambian alla, cambiarlas aca.
+streamlit==1.63.0
+plotly==7.0.0
+pandas==3.0.5
+numpy==2.3.4
+scipy==1.18.0
+# eda.py, que da los nombres de barrio, importa matplotlib y seaborn.
+matplotlib==3.10.7
+seaborn==0.13.2

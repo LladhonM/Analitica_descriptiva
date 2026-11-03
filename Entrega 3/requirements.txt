@@ -21,7 +21,7 @@ seaborn==0.13.2
 plotly==7.0.0
 
 # Tablero interactivo (tablero/app.py)
-streamlit==1.63.0
+streamlit==1.66.1
 
 # Estadistica e inferencia de los notebooks
 scipy==1.18.0

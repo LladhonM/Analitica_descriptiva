@@ -3,7 +3,7 @@
 # comillas y el espacio de "Entrega 3" la corta en dos. Por eso tampoco tiene que haber
 # un requirements.txt dentro de Entrega 3/tablero/: Community Cloud lo busca primero ahi.
 # Las versiones son las mismas de Entrega 3/requirements.txt: si cambian alla, cambiarlas aca.
-streamlit==1.63.0
+streamlit>=1.66.1
 plotly==7.0.0
 pandas==3.0.5
 numpy==2.3.4

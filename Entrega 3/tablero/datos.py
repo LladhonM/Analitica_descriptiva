@@ -70,6 +70,11 @@ COLORES = {
     "en_banda": "#B9BCC4",
     "sobre_techo": "#C08A1E",
     "seleccion": "#00A676",     # la propiedad elegida, en todas las vistas; solo para eso
+    # Interfaz del rediseño: fondo de la pagina detras de las tarjetas blancas,
+    # bordes y texto secundario (6:1 sobre blanco).
+    "fondo_pagina": "#F3F5F9",
+    "borde": "#E1E6EE",
+    "texto_2": "#5B6170",
 }
 
 TIPOS = {"departamento": "Departamento", "ph": "PH", "casa": "Casa"}

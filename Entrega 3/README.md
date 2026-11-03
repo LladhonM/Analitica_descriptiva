@@ -5,7 +5,7 @@
 Tercera etapa del análisis de rentabilidad inmobiliaria para un pequeño inversor
 particular que, con USD 80.000 a 200.000, evalúa comprar **una** unidad en CABA para
 alquilarla. Esta entrega valida formalmente las hipótesis, completa la fusión espacial,
-y resuelve y evalúa la decisión del inversor, con un tablero orientado a él.
+resuelve y evalúa la decisión del inversor, y la pone en sus manos con un tablero.
 
 La 1ra y la 2da entrega están en sus propias carpetas y no se modifican. Esta carpeta es
 autónoma: tiene su propio pipeline, sus datos y sus tests, y no lee nada fuera de ella.
@@ -34,11 +34,11 @@ la decisión del inversor.
 
 ---
 
-## Estado
+## Qué contiene esta entrega
 
-La carpeta contiene la **base heredada de la 2da entrega, depurada y verificada**: el
-pipeline corre acá desde el crudo y reproduce las cifras de referencia (ver
-[Reproducir](#reproducir)). Sobre esa base están hechas:
+La carpeta parte de la **base de la 2da entrega, depurada y verificada**: el pipeline
+corre acá desde el crudo y reproduce las cifras de referencia (ver
+[Reproducir](#reproducir)). Sobre esa base:
 
 - la **fusión espacial** y la medida de accesibilidad (ver
   [Accesibilidad al transporte](#accesibilidad-al-transporte));
@@ -52,14 +52,85 @@ pipeline corre acá desde el crudo y reproduce las cifras de referencia (ver
   informativo que no entra al modelo (ver [Síntesis de atributos](#síntesis-de-atributos-y-micro-mercados));
 - la **función de decisión** para P1 a P3, implementada y evaluada (ver
   [Función de decisión](#función-de-decisión));
-- el **informe de hallazgos**, regenerado con todo lo anterior;
-- el **dataset para el tablero**, con su diccionario y una guía de qué columnas usar
-  ([`data/processed/GUIA_TABLERO.md`](data/processed/GUIA_TABLERO.md)).
+- el **tablero para el inversor**, en Streamlit (ver [El tablero](#el-tablero));
+- el **informe de hallazgos**, regenerado con todo lo anterior.
 
-Falta el **tablero**, que arma otro integrante del grupo con este dataset. La revisión
-del modelo no cambió el alquiler estimado, así que los KPIs 1 a 3 quedan fijos; el KPI 4
-sí cambió. El resto se registra en la tabla
-[Qué se construye en esta entrega](#qué-se-construye-en-esta-entrega).
+La revisión del modelo no cambió el alquiler estimado, así que los KPIs 1 a 3 quedan
+fijos; el KPI 4 sí cambió. Qué se pidió para esta entrega y cómo se resolvió cada punto
+está en [Qué cambia respecto de la 2da entrega](#qué-cambia-respecto-de-la-2da-entrega).
+
+---
+
+## El tablero
+
+> **Tengo entre USD 80.000 y 200.000: ¿conviene comprar para alquilar, y si compro, qué?**
+
+El tablero es la interfaz del inversor con el análisis. No replica los notebooks: cada
+pestaña responde una pregunta suya, y todo lo que muestra sale de columnas ya calculadas
+en `data/processed/dataset_analitico.csv`. La app solo filtra y resume; no recalcula
+ningún KPI, así que cada número de la pantalla coincide con el del informe.
+
+### Cómo abrirlo
+
+```bash
+py -m pip install -r requirements.txt     # una sola vez
+cd tablero
+py -m streamlit run app.py
+```
+
+Se abre en el navegador, en `http://localhost:8501`. Se corre desde `tablero/` porque
+Streamlit toma el tema de `tablero/.streamlit/config.toml` de la carpeta desde donde se
+ejecuta. Lee el dataset versionado, así que no hace falta correr el pipeline antes.
+
+### Qué muestra
+
+Un **encabezado fijo** indica cuántas propiedades quedan con los filtros elegidos
+("Mostrando N de 9.203 propiedades"), de qué cartera y en qué fecha se relevaron. Debajo,
+siempre visibles, van tres limitaciones: son **precios de publicación**, es **una sola
+inmobiliaria** que publica alrededor de 8% más barato que el mercado, y **cada
+rentabilidad es una banda**, no un número.
+
+| Pestaña | La pregunta del inversor | Qué muestra |
+|---|---|---|
+| **¿Conviene comprar?** | ¿La propiedad típica le gana a la renta fija en dólares? | Neta mediana con su banda, TIR a 5 años, porcentaje de propiedades sobre el piso y distancia al piso. Histograma de la neta (o de la TIR) contra la banda de retorno mínimo, y cuántas propiedades pasan cada vara: 4.484 → 227 → 18 → 4 sin filtros |
+| **¿Dónde?** | ¿Qué barrios rinden más, y por qué? | Mapa de las propiedades coloreado por rentabilidad; neta y TIR medianas por barrio, con la banda; y la relación entre el m² del barrio y la rentabilidad (H1) |
+| **¿Qué comprar?** | ¿Qué propiedades vale la pena mirar? | Las que pasan P1, rotuladas **"a verificar"**, nunca "comprar", porque cuestan alrededor de 30% menos por m² que su celda; la frontera de P2 como rangos, ordenada por ancho de banda y no por rentabilidad; y la ficha de la propiedad elegida, con el link al aviso |
+| **¿Tradicional o temporal?** | ¿Alquilar por noche cambia la respuesta? | En cuántas celdas gana el temporal según la ocupación, con gestión tercerizada y autogestionada, y la ocupación de equilibrio para cada vacancia del tradicional |
+| **Supuestos y alcance** | ¿Cuánto depende todo de los supuestos, y qué no se puede afirmar? | Cuántas propiedades pasan P1 en cada uno de los 22 escenarios de sensibilidad, las limitaciones completas y la fecha de cada fuente |
+
+Toda neta va con su banda, y todo gráfico de rentabilidad tiene sombreada la banda de
+retorno mínimo. Los resúmenes son medianas.
+
+### Filtros
+
+En la barra lateral: presupuesto, tipo de propiedad, comuna, barrio, ambientes,
+superficie, antigüedad y la métrica (neta o TIR a 5 años), con un botón para
+restablecerlos. Arranca con el presupuesto del inversor y solo departamentos.
+
+- **Qué responde a los filtros.** Las vistas que leen el dataset (la primera pestaña,
+  el mapa y la dispersión de la segunda, y toda la tercera). Las que leen tablas
+  precalculadas (ranking de barrios, P3 y sensibilidad) no, y cada una lo dice.
+- **Estados sin información.** Si no queda ninguna propiedad, un mensaje reemplaza los
+  gráficos. Si quedan menos de 30, un aviso advierte que la mediana es poco confiable.
+- **Casas y PH.** Si se eligen, el tablero avisa que el modelo casi no tiene alquileres
+  observados de ellos, y oculta P1 y P2.
+- **Fuera de los filtros, a propósito**: la banda de retorno, que es una referencia fija,
+  y las amenities, que no cambian la decisión.
+
+### Cómo se verificó
+
+`py tablero/test_tablero.py` corre 106 verificaciones sobre la lógica del tablero
+(`tablero/datos.py`):
+
+- **Sin filtros reproduce las cifras de referencia**: neta mediana 5,65%, 19,4% de las
+  propiedades sobre el piso, TIR mediana 4,27% y las etapas 4.484 → 227 → 18 → 4.
+- **Cada filtro**, contra la condición que dice aplicar, fila por fila.
+- **Negativos**: un filtro que deja cero filas no rompe los KPIs ni las etapas.
+
+El diseño (paleta, pestañas, filtros, estados) está en
+[`data/processed/DISENO_TABLERO.md`](data/processed/DISENO_TABLERO.md); qué columnas usa y
+qué advertencias son obligatorias, en
+[`data/processed/GUIA_TABLERO.md`](data/processed/GUIA_TABLERO.md).
 
 ---
 
@@ -84,135 +155,11 @@ notebooks 01 a 03, y esta carpeta parte de su resultado.
 
 ---
 
-## Procedencia de cada archivo
-
-### Traído de la 2da entrega
-
-Todo sale de la carpeta `Entrega 2/` del commit `24e09b6`, que es la versión corregida
-de la 2da pre-entrega, y son solo archivos versionados. El código, los datos y la
-configuración se copiaron en una sola operación, al crear esta carpeta. El catálogo de
-fuentes se trajo después, cuando la fusión espacial lo hizo necesario (ver
-**Documentación**, abajo). La columna "Estado" indica qué cambió desde que se trajo.
-
-**Código (`src/`)**
-
-| Archivo | Estado |
-|---|---|
-| `src/limpieza.py` | Sin cambios |
-| `src/variables.py` | Sin cambios |
-| `src/kpis.py` | Lee `dataset_espacial.csv` (salida de `espacial.py`) en lugar de `dataset_variables.csv`. **El KPI 2 usa el ABL de cada propiedad** (`costos.py`) en lugar de un porcentaje plano; `--gastos` vuelve al plano. Suma costos de entrada, refacción y TIR a 5 años, el antes y el después, y una segunda grilla de sensibilidad (ABL × costos de entrada × vacancia). Calcula la banda cuantílica del KPI 4 y guarda el `.joblib` con metadata: versión de scikit-learn, fecha, hash de los datos de entrenamiento, predictoras y métricas. El modelo de alquiler no cambia. En el docstring, el apartado sobre las dummies de RegEx se atribuye a la 2da entrega |
-| `src/modelo_alquiler.py` | Se quitó el `main()`, un punto de entrada heredado de la 1ra entrega que no usaba nadie: aplicaba vacancia 8% y gastos 12% (no los de `supuestos.py`), escribía archivos que el pipeline no usa y pisaba `ranking_barrios.csv`. El docstring deja de citar un error de ~11,5%, que no es el vigente (11,2%). `calcular_rentabilidad` acepta gastos por propiedad. **El ranking de barrios se ordena por neta y no por bruta**, con desempate por nombre: con el ABL segmentado ya no es lo mismo, y el orden ya no cambia entre corridas. **La banda del KPI 4 es nueva**: regresión cuantílica calibrada por grupo de evidencia (`banda_cuantilica`) en lugar del error mediano del tramo. `entrenar_y_validar` devuelve sus métricas para la metadata del `.joblib`. El Ridge no cambia |
-| `src/supuestos.py` | Se quitaron constantes que ningún script ni notebook leía (`TOP_BARRIOS_HEATMAP` y tres `SCATTER_*`); la fecha de consulta y el umbral de completitud pasan a comentario. Nuevas secciones: radio de caminata y tramos de H2 (4b2), criterio para reemplazar el modelo (`MEJORA_MINIMA_R2`), nivel de significación de los tests (`ALFA`), ABL segmentado (3b2), costos de entrada (3e), refacción (3f) y riesgo legal como limitación (3g) y la función de decisión (4d: soporte del modelo, margen por liquidez y grillas de sensibilidad). **Se corrigieron dos errores heredados del ABL**: el ejemplo de ARS 43.994 es con coeficiente geográfico 1,75 y no 1,25, y la fuente no dice que una VFH de 15 a 25 millones sea "el rango de un 2 ambientes usado" |
-| `src/eda.py` | Se quitaron un import sin uso (`matplotlib.pyplot`), un color que no se usaba (`BUENO`) y tres funciones que solo usaban los notebooks de la 2da entrega y su informe (`leer_asimetria`, `cobertura_estratos`, `resumir_efecto`) |
-| `src/temporal.py` | Se quitó un import sin uso (`numpy`). `lado_remax()` acepta la ruta del dataset como parámetro. La neta tradicional y los fijos del temporal usan el ABL mediano de cada celda en lugar del plano, para que P3 use los mismos gastos que el KPI 2 |
-| `src/reporte.py` | **Reescrito con los hallazgos de esta entrega**, ordenados por cuánto cambian la decisión: la función de decisión, los costos de entrada, el modelo y su banda, los tests formales, los micro-mercados, el temporal, el sesgo de la cartera y H2. Solo quedan los hallazgos que cambian la decisión, y se listan los de la 2da que no siguen. Las cifras de los tests salen de `validacion.resumen_hipotesis`. Vuelve a ser parte del pipeline |
-| `src/sesgo.py` | Sin cambios |
-| `src/fuentes_externas.py` | Sin cambios |
-| `src/test_fuentes.py` | Resuelve las rutas desde la ubicación del archivo: antes solo corría desde la raíz de la entrega |
-| `src/test_supuestos.py` | Verifica el contrato nuevo del KPI 2 (gastos de cada propiedad = 10,24% + su ABL), la tabla de coeficientes geográficos (48 barrios, entre 0 y 2), la escala del Impuesto Inmobiliario y los rangos de los costos de entrada. Incluye un negativo: con el gasto plano, la neta del dataset no coincide |
-| `src/test_variables.py` | Sin cambios |
-| `src/test_eda.py` | Sin los tests de esas tres funciones. Los del efecto estratificado verifican `efecto_estratificado` con `mediana_ponderada`, que es lo que usan el informe y el notebook 02 |
-
-**Datos (`data/`)**
-
-| Archivo | Estado |
-|---|---|
-| `data/raw/dataset_maestro.csv` | Sin cambios. Es el crudo del scraping de la 1ra entrega (14.867 avisos, 16-08-2026) |
-| `data/external/` (7 tablas y `reporte_fuentes.txt`) | Sin cambios. Tablas agregadas y fechadas de IDECBA, Colegio de Escribanos, Inside Airbnb y Censo 2022 |
-| `data/reference/` (`ranking_barrios_entrega1.csv`, `LEEME.md`) | Sin cambios |
-| `data/processed/` — `auditoria_calidad.csv`, `reporte_limpieza.txt`, `reporte_regex.txt` | **Regenerados en esta carpeta** por `limpieza.py` y `variables.py`. Contenido idéntico al de la 2da entrega; los reportes cambian la fecha de corrida |
-| `data/processed/` — `dataset_analitico.csv`, `ranking_barrios.csv`, `modelo_alquiler.joblib`, `sensibilidad_supuestos.csv`, `reporte_kpis.txt` | **Regenerados con contenido nuevo** por `espacial.py` y `kpis.py`. `dataset_analitico.csv` suma 17 columnas (accesibilidad, costos y percentiles del alquiler) y pierde `error_estimacion`; `rent_neta_pct` usa el ABL segmentado y `rent_bruta_min` / `rent_bruta_max` salen de la banda cuantílica; el resto de las columnas heredadas no cambia. El ranking se ordena por neta. La sensibilidad suma la grilla B |
-| `data/processed/` — `temporal_vs_tradicional.csv`, `reporte_temporal.txt` | **Regenerados** por `temporal.py`, con el ABL segmentado |
-| `data/processed/` — `sesgo_precio_barrio.csv`, `sesgo_representacion_comuna.csv`, `reporte_sesgo.txt` | **Regenerados** por `sesgo.py` en la corrida completa. Contenido idéntico al de la 2da entrega: `sesgo.py` no usa la neta; el reporte cambia la fecha de corrida |
-| `data/processed/DICCIONARIO_DATOS.md` | El encabezado deja de presentar la matriz como "de la 2da pre-entrega". Se agregaron la sección 8.1 (ABL, costos y TIR), la 9 (accesibilidad), la 10 (función de decisión), los pasos nuevos del linaje, la fórmula nueva de `rent_neta_pct` y cuatro advertencias de uso |
-
-**Configuración**
-
-| Archivo | Estado |
-|---|---|
-| `requirements.txt` | Versiones exactas en lugar de mínimas. Se agregó `openpyxl`: `fuentes_externas.py` lo importa para leer los cuadros de IDECBA y del Colegio, y no estaba declarado |
-| `.gitignore` | Se agregó `dataset_espacial.csv`, el intermedio nuevo del pipeline, y el comentario registra que `decision.py` también escribe en el dataset analítico |
-
-**Documentación**
-
-| Archivo | Estado |
-|---|---|
-| `informe/FUENTES_EXTERNAS.md` | Traído **en un segundo paso**, al incorporar las capas espaciales: no estaba en la copia inicial. Sale del mismo commit `24e09b6` y era idéntico al de la 2da entrega al traerlo. Se trajo en lugar de escribir un catálogo nuevo para que las fuentes 1 a 5, cuyas tablas sí están en `data/external/`, sigan documentadas en esta carpeta. Cambios: las fichas 6 a 9 (subte, tren, Metrobús, espacios verdes) reemplazan a la ficha "planificada" de transporte; se suma la sección sobre qué mide la distancia y qué no; el IPC pasa a ser la ficha 10, y las referencias al contexto apuntan al README de la 2da entrega |
-
-### No traído
-
-Los notebooks, los gráficos y el informe de hallazgos de la 2da entrega **no se
-copiaron**. Esta entrega tiene los suyos (ver [Cómo leer el trabajo](#cómo-leer-el-trabajo-los-notebooks)),
-y conserva solo los gráficos y hallazgos que cambian la decisión del inversor.
-
-### Construido en esta entrega
-
-| Archivo | Qué es |
-|---|---|
-| `src/espacial.py` | Fusión espacial y medida de accesibilidad. El cálculo de distancias (BallTree con métrica haversine, y la distancia a un polígono medida contra sus vértices) **se adaptó de `enriquecimiento.py`, del repositorio de trabajo del grupo** (`LladhonM/Analitica-Descriptiva`, commit `2f407b2`). Es nuevo: el Metrobús, la medida combinada, las capas versionadas, los reportes de cobertura y heterogeneidad, y que los parques excluyan los canteros centrales |
-| `src/test_espacial.py` | 52 tests de la fusión espacial, con negativos |
-| `src/accesibilidad.py` | H2: pendiente con y sin barrio fijo, perfil por tramos de distancia, radio de influencia y réplica del antecedente del repositorio de trabajo |
-| `src/test_accesibilidad.py` | 8 tests de H2, sobre datos sintéticos con la respuesta conocida: el barrio fijo elimina la centralidad pura y el perfil recupera una penalidad plantada |
-| `src/costos.py` | Fórmulas del ABL segmentado (Ley 6927), costos de entrada, refacción y TIR a 5 años. Los números están en `supuestos.py` |
-| `src/test_costos.py` | 38 tests. El ABL se valida contra un oráculo externo: los siete ejemplos que calcula Roomix con la Ley 6927 |
-| `data/processed/h2_perfil_distancia.csv`, `reporte_h2.txt` | Salida de `accesibilidad.py` |
-| `data/processed/antes_despues_kpis.csv` | Neta mediana, barrios sobre el piso y top 5, antes y después del ajuste |
-| `src/comparacion_modelos.py` | El modelo de alquiler contra una referencia simple, con variables espaciales y contra gradient boosting, fuera de muestra en tres semillas, y la cobertura de la banda anterior contra la nueva (`cobertura_banda.csv`) |
-| `src/test_modelo.py` | 25 tests: la calibración conformal sobre un caso sintético, la metadata del `.joblib` (con su hash contra los datos de entrada) y la coherencia de la banda |
-| `data/processed/comparacion_modelos.csv`, `cobertura_banda.csv`, `reporte_comparacion_modelos.txt` | Salida de `comparacion_modelos.py` |
-| `notebooks/01_accesibilidad.ipynb`, `02_costos_del_propietario.ipynb`, `03_modelo_alquiler.ipynb` | Los notebooks de esta entrega (ver [Cómo leer el trabajo](#cómo-leer-el-trabajo-los-notebooks)) |
-| `src/validacion.py` | Las piezas de los tests formales: Spearman por permutación, Holm, errores agrupados, Van Elteren y la pendiente con efectos fijos de celda con su bootstrap. `resumen_hipotesis` repite los cuatro tests con las semillas del notebook 04 para el informe |
-| `src/test_validacion.py` | 19 tests de esas piezas contra oráculos independientes (scipy, la regresión con dummies, HC1), con negativos |
-| `notebooks/04_validacion.ipynb` | Los tests formales de H1 a H4 |
-| `src/sintesis.py` | PCA sobre las dummies, MCA con la corrección de Benzécri, micro-mercados por k-medias con su estabilidad, y la prima de cada grupo con precios observados |
-| `src/test_sintesis.py` | 18 tests: el MCA contra el chi-cuadrado de scipy y la fórmula de transición, los micro-mercados contra grupos plantados y la prima contra una prima plantada, con negativos |
-| `notebooks/05_sintesis_atributos.ipynb` | La síntesis de atributos y los micro-mercados |
-| `src/decision.py` | La función de decisión: P1, P2 y P3, su evaluación y su sensibilidad. Agrega 14 columnas al dataset analítico |
-| `src/test_decision.py` | 25 tests: la frontera y los pares de P2 contra la comparación de todos los pares, la neta central contra `kpis.py`, la ocupación de equilibrio contra `temporal.py`, con negativos |
-| `notebooks/06_decision.ipynb` | La función de decisión |
-| `data/processed/decision_sensibilidad.csv`, `decision_p3.csv`, `reporte_decision.txt` | Salida de `decision.py` |
-| `informe/INFORME_HALLAZGOS.md` | El informe de esta entrega, que emite `reporte.py` |
-| `data/processed/GUIA_TABLERO.md` | Para quien arma el tablero: qué columnas usar y cuáles son internas, y las limitaciones que van en pantalla |
-| `graficos/01` a `15` | Los gráficos que guardan los notebooks |
-| `data/external/transporte_estaciones.csv` | Bocas de subte, estaciones de tren y paradas de Metrobús, con fuente y fecha de descarga |
-| `data/external/espacios_verdes.csv`, `espacios_verdes_vertices.csv` | Plazas y parques, y los vértices de sus polígonos |
-| `data/processed/reporte_espacial.txt` | Log de `espacial.py`: capas, cobertura del dato, distancias, acceso por comuna y heterogeneidad por barrio |
-| `README.md` | Este archivo |
-
-Las capas se bajaron de Buenos Aires Data el 27-10-2026 y son idénticas, byte a byte, a
-las que usaba `enriquecimiento.py`: se volvieron a descargar de la fuente oficial, con
-fecha, en lugar de copiarse.
-
-## Qué se construye en esta entrega
-
-| # | Qué se entrega | Origen del pedido | Estado |
-|---|---|---|---|
-| 1 | Fusión espacial: distancia de cada aviso a subte, tren y Metrobús, y una medida de accesibilidad que combine los tres modos. Con eso, H2 deja de ser "no evaluable" | Devolución de la 2da entrega, prioridad 1 | Hecho: capas, medida, cobertura, y magnitud y forma de H2 (ver [H2](#h2-precio-del-m²-y-distancia-a-la-red)). El contraste con p-valor va con los tests de la fila 2 |
-| 2 | Tests formales de H1 a H4, con p-valor, tamaño del efecto, intervalo y lectura de si cambian la decisión | Devolución, prioridad 2 | Hecho (ver [Hipótesis](#hipótesis-los-tests-formales)) |
-| 3 | Función de decisión prescriptiva para P1 (comprar o no), P2 (qué propiedad) y P3 (tradicional o temporal), **implementada y evaluada** | Devolución, prioridad 3; consigna de la 3ra entrega | Hecho (ver [Función de decisión](#función-de-decisión)) |
-| 4 | ABL segmentado por barrio, superficie y tipo de propiedad, y su efecto sobre la rentabilidad neta | Devolución, prioridad 4 | Hecho (ver [Costos del propietario](#costos-del-propietario-antes-y-después)) |
-| 5 | Costos de entrada, refacción, liquidez y riesgo legal, con fuente y fecha en `supuestos.py` | Devolución, prioridad 5 | Hecho: entrada y refacción con fuente; riesgo legal como limitación declarada. La liquidez sigue siendo la del tiempo de publicación de IDECBA (ficha 5 del catálogo) |
-| 6 | Síntesis de atributos (PCA/MCA) y micro-mercados | Plan de la 2da entrega | Hecho, como análisis informativo: no entra al modelo (ver [Síntesis de atributos](#síntesis-de-atributos-y-micro-mercados)) |
-| 7 | Revisión del modelo de alquiler con las variables espaciales y contra una referencia simple | Plan de la 2da entrega; devolución | Hecho (ver [Modelo de alquiler](#modelo-de-alquiler)) |
-| 8 | Tablero para el inversor (Streamlit) | Consigna de la 3ra entrega | A cargo de otro integrante del grupo. De este lado está hecho el insumo: el dataset final, el diccionario y [`GUIA_TABLERO.md`](data/processed/GUIA_TABLERO.md) |
-| 9 | Depuración del repositorio: código sin uso, referencias a versiones anteriores, versiones fijas, tests independientes del directorio | Devolución, prioridad 6 | Hecho (ver [Procedencia](#procedencia-de-cada-archivo)) |
-| 10 | Informe de hallazgos con lo nuevo, conservando solo lo que cambia la decisión | Devolución, prioridad 7 | Hecho ([`informe/INFORME_HALLAZGOS.md`](informe/INFORME_HALLAZGOS.md)) |
-
-### Alcance corregido respecto del plan de la 2da entrega
-
-El README de la 2da entrega cierra con un "Plan para lo pendiente" que ubica la
-**función de decisión prescriptiva** y el **tablero para el inversor** en la entrega
-final. La consigna vigente los pide en esta, la 3ra pre-entrega, y esta entrega los
-incluye (filas 3 y 8). Esa tabla no se modifica porque la 2da entrega ya está
-corregida; el alcance que vale es el de esta sección.
-
----
-
 ## Accesibilidad al transporte
 
-La devolución de la 2da entrega pidió no cerrar H2 con el subte solo, porque no cubre el
-sur ni el oeste de la Ciudad. `espacial.py` mide, para cada aviso, la distancia a la
-red de subte, a la de tren y a la de Metrobús, y las combina en una medida.
+H2 no se puede cerrar con el subte solo, porque el subte no cubre el sur ni el oeste de
+la Ciudad. `espacial.py` mide, para cada aviso, la distancia a la red de subte, a la de
+tren y a la de Metrobús, y las combina en una medida.
 
 ### La medida, en una frase
 
@@ -327,9 +274,9 @@ por tramos lo ubica a partir de 1 km.
 (−0,9%) ni el Metrobús (−1,3%) penalizan la lejanía, y estar a 300-1.500 m del tren
 no vale menos que estar al lado.
 
-**El antecedente no se replica en sus términos.** En el repositorio de trabajo había
-aparecido una correlación intra-barrio negativa con la distancia al subte a más de 1 km.
-Con estos datos, el Spearman entre el precio descontado el promedio del barrio y la
+**Un antecedente que no se replica.** Un análisis exploratorio previo del grupo había
+encontrado una correlación intra-barrio negativa con la distancia al subte a más de
+1 km. Con estos datos, el Spearman entre el precio descontado el promedio del barrio y la
 distancia al subte es **0,000** en los 3.375 avisos a más de 1 km.
 
 **Lectura.** La primera mitad del enunciado propuesto se sostiene: *la accesibilidad ya
@@ -363,8 +310,9 @@ tipo de propiedad.
 La proporción **no tiene fuente publicada**: es una estimación propia. Se calibra en
 14,99% para que la unidad de referencia (2 ambientes, 40 a 60 m²) siga pagando 3,80%. De
 ese modo el ajuste **redistribuye** el ABL sin cambiar su nivel, y el nivel se prueba
-aparte con la proporción en el tope legal del 20%. La fórmula reproduce al peso los
-siete ejemplos que calcula Roomix con la misma ley (`test_costos.py`).
+aparte con la proporción en el tope legal del 20%. Antes de usarla, la fórmula se validó
+contra un sistema externo: reproduce al peso los siete ejemplos que calcula Roomix con la
+misma ley (`test_costos.py` y notebook 02).
 
 | ABL como % del alquiler, por quintil de rentabilidad bruta (base confiable) | Q1 (rinde menos) | Q2 | Q3 | Q4 | Q5 (rinde más) |
 |---|---|---|---|---|---|
@@ -372,7 +320,8 @@ siete ejemplos que calcula Roomix con la misma ley (`test_costos.py`).
 | Segmentado | 4,65% | 4,29% | 3,99% | 3,62% | 3,19% |
 
 El plano les cobraba de menos a las unidades que rinden poco y de más a las que rinden
-mucho, como había advertido la devolución.
+mucho: el ABL sigue al valor del inmueble, y el alquiler no lo sigue en la misma
+proporción.
 
 ### Costos de entrada y refacción
 
@@ -464,9 +413,9 @@ costos de entrada dejan a toda la Ciudad debajo de la vara.
 
 ## Modelo de alquiler
 
-La devolución difirió a esta entrega la revisión del modelo, y la consigna pide
-compararlo con una referencia razonable y evaluarlo fuera de muestra. Desarrollo
-completo en el [notebook 03](notebooks/03_modelo_alquiler.ipynb).
+Todo lo que el trabajo dice sobre rentabilidad depende del alquiler estimado, así que el
+modelo se compara contra una referencia razonable y se evalúa fuera de muestra.
+Desarrollo completo en el [notebook 03](notebooks/03_modelo_alquiler.ipynb).
 
 ### La tabla comparativa
 
@@ -494,8 +443,8 @@ mercado por cada característica, y esa lectura es parte del producto para el in
 tren, al Metrobús, a la red más cercana de las tres, y a la plaza y al parque más
 cercanos. Se probaron solo en la variante "Ridge + espaciales": el modelo vigente nunca
 las incluyó y sigue con las 21 predictoras de la 2da entrega. No se eliminaron del
-trabajo: siguen como columnas del dataset, se usan para H2 y quedan disponibles para el
-tablero.
+trabajo: siguen como columnas del dataset, se usan para H2 y el tablero muestra la
+distancia y el modo de transporte en la ficha de cada propiedad.
 
 ### La banda del KPI 4
 
@@ -515,7 +464,8 @@ sabe sobre cuánta confianza merece. La banda anterior prometía una precisión 
 tenía: por construcción, dejaba afuera a la mitad. La nueva es más ancha (3,45 puntos de
 rentabilidad bruta en la mediana, 4,92 en las unidades de más de 100 m²) y dos de cada
 tres propiedades tienen una banda que contiene la rentabilidad mediana del mercado. Es
-el insumo del criterio de P2 en la función de decisión.
+el insumo del criterio de P2 en la función de decisión, y la banda que el tablero
+muestra junto a cada neta.
 
 Un resultado que no era el esperado: los barrios con menos de 10 alquileres no se
 predicen peor fuera de muestra (la banda sin calibrar los cubría en 80,7%), así que su
@@ -561,8 +511,10 @@ son independientes. H4 usa solo antigüedad observada. Las piezas estadísticas 
 
 ## Síntesis de atributos y micro-mercados
 
-El plan de la 2da entrega dejó para esta "PCA/MCA sobre las dummies y clustering de
-propiedades". Desarrollo completo en el [notebook 05](notebooks/05_sintesis_atributos.ipynb).
+¿Se pueden resumir los atributos del aviso en pocos ejes, y hay tipos de propiedad que
+rinden distinto dentro de un mismo barrio? Es el "PCA/MCA sobre las dummies y clustering
+de propiedades" que había planteado la 2da entrega. Desarrollo completo en el
+[notebook 05](notebooks/05_sintesis_atributos.ipynb).
 
 **Los ejes.** PCA sobre las 29 dummies físicas del aviso, y MCA sobre las mismas más tipo,
 tramo de superficie, tramo de antigüedad y disposición. Los dos métodos encuentran los
@@ -645,6 +597,9 @@ dentro del presupuesto.
   92. Los pares distinguibles quedan entre 7% y 8% en todos los escenarios.
 - **P3 no cambia de signo** con ninguna vacancia del tradicional.
 
+En el tablero, P1 aparece como una lista **a verificar** y P2 como rangos ordenados por
+ancho de banda, para que ninguna de las dos se lea como un ranking de compra.
+
 ---
 
 ## Decisiones metodológicas
@@ -662,6 +617,7 @@ Las que más pesan en los resultados, con dónde se justifican:
 | α = 0,05 fijado antes, y cada test con su efecto en unidades del inversor | Con 9.203 ventas casi todo es significativo | [Hipótesis](#hipótesis-los-tests-formales) |
 | Los micro-mercados se comparan con precios observados, no con la rentabilidad estimada | El numerador de la rentabilidad sale de un modelo que ya usa esos atributos | Notebook 05 |
 | P1 contra el techo de la banda y con el escenario pesimista; P2 por dominancia de bandas; soporte del modelo | Una compra no se deshace barato, y la banda es la incertidumbre real de cada estimación | [Función de decisión](#función-de-decisión) |
+| El tablero no recalcula KPIs: filtra y resume columnas ya materializadas | Cada número de la pantalla coincide con el del informe, y un test lo verifica | [El tablero](#el-tablero) |
 | El informe lo escribe un script | Cada cifra narrada sale del dato y no se desincroniza | `src/reporte.py` |
 
 ---
@@ -682,6 +638,140 @@ Las que más pesan en los resultados, con dónde se justifican:
 - **Accesibilidad en línea recta**: no ve barreras, frecuencias ni destinos, y no incluye
   el Premetro.
 - **Un corte temporal único**: el relevamiento es de agosto de 2026.
+- **Asociación, no causalidad**: los tests muestran relaciones entre variables, no qué
+  las provoca.
+
+El tablero muestra las tres primeras en su encabezado y todas en la pestaña *Supuestos y
+alcance*.
+
+---
+
+## Qué cambia respecto de la 2da entrega
+
+La devolución de la 2da entrega fijó siete prioridades, y la consigna de la 3ra suma la
+función de decisión y el tablero. Cada pedido, con lo que se hizo y dónde se ve:
+
+| # | Pedido | Origen | Qué se hizo | Dónde |
+|---|---|---|---|---|
+| 1 | Fusión espacial: distancia de cada aviso a subte, tren y Metrobús, y una medida que combine los tres modos, para que H2 deje de ser "no evaluable" | Devolución, prioridad 1 | Capas, medida, cobertura y magnitud y forma de H2. Con el subte solo, las comunas 8 y 11 no tenían acceso; con las tres redes, más del 70% | [Accesibilidad](#accesibilidad-al-transporte), [H2](#h2-precio-del-m²-y-distancia-a-la-red) |
+| 2 | Tests formales de H1 a H4, con p-valor, tamaño del efecto, intervalo y si cambian la decisión | Devolución, prioridad 2 | Los cuatro tests. H2 se reformula como un escalón a 1 km | [Hipótesis](#hipótesis-los-tests-formales) |
+| 3 | Función de decisión prescriptiva para P1, P2 y P3, **implementada y evaluada** | Devolución, prioridad 3; consigna de la 3ra entrega | Implementada en `decision.py` y evaluada en 22 escenarios | [Función de decisión](#función-de-decisión) |
+| 4 | ABL segmentado por barrio, superficie y tipo de propiedad, y su efecto sobre la rentabilidad neta | Devolución, prioridad 4 | ABL por propiedad con la Ley Tarifaria 2026. Redistribuye, pero no mueve la conclusión | [Costos](#costos-del-propietario-antes-y-después) |
+| 5 | Costos de entrada, refacción, liquidez y riesgo legal, con fuente y fecha | Devolución, prioridad 5 | Entrada y refacción con fuente, y la TIR a 5 años. El riesgo legal queda como limitación declarada; la liquidez sigue siendo la de IDECBA (ficha 5 del catálogo) | [Costos](#costos-del-propietario-antes-y-después) |
+| 6 | Depuración del repositorio: código sin uso, referencias a versiones anteriores, versiones fijas, tests independientes del directorio | Devolución, prioridad 6 | Hecho, archivo por archivo | [Procedencia](#procedencia-de-cada-archivo) |
+| 7 | Informe de hallazgos con lo nuevo, conservando solo lo que cambia la decisión | Devolución, prioridad 7 | `reporte.py` reescrito; lista también los hallazgos de la 2da que no siguen | [`informe/INFORME_HALLAZGOS.md`](informe/INFORME_HALLAZGOS.md) |
+| 8 | Revisión del modelo de alquiler con las variables espaciales y contra una referencia simple | Plan de la 2da entrega; devolución | El Ridge se queda; la banda del KPI 4 pasa de cubrir 50% a 82% | [Modelo de alquiler](#modelo-de-alquiler) |
+| 9 | Síntesis de atributos (PCA/MCA) y micro-mercados | Plan de la 2da entrega | Hecho, como análisis informativo: no entra al modelo | [Síntesis de atributos](#síntesis-de-atributos-y-micro-mercados) |
+| 10 | Tablero para el inversor | Consigna de la 3ra entrega | Streamlit, cinco pestañas, verificado contra las cifras del informe | [El tablero](#el-tablero) |
+
+**Alcance corregido respecto del plan de la 2da entrega.** El README de la 2da entrega
+cierra con un "Plan para lo pendiente" que ubica la función de decisión y el tablero en
+la entrega final. La consigna vigente los pide en esta pre-entrega, y esta entrega los
+incluye (filas 3 y 10). Esa tabla no se modifica porque la 2da entrega ya está
+corregida; el alcance que vale es el de esta sección.
+
+---
+
+## Procedencia de cada archivo
+
+### Traído de la 2da entrega
+
+Todo sale de la carpeta `Entrega 2/` del commit `24e09b6`, que es la versión corregida
+de la 2da pre-entrega, y son solo archivos versionados. El código, los datos y la
+configuración se copiaron en una sola operación, al crear esta carpeta. El catálogo de
+fuentes se trajo después, cuando la fusión espacial lo hizo necesario (ver
+**Documentación**, abajo). La columna "Estado" indica qué cambió desde que se trajo.
+
+**Código (`src/`)**
+
+| Archivo | Estado |
+|---|---|
+| `src/limpieza.py` | Sin cambios |
+| `src/variables.py` | Sin cambios |
+| `src/kpis.py` | Lee `dataset_espacial.csv` (salida de `espacial.py`) en lugar de `dataset_variables.csv`. **El KPI 2 usa el ABL de cada propiedad** (`costos.py`) en lugar de un porcentaje plano; `--gastos` vuelve al plano. Suma costos de entrada, refacción y TIR a 5 años, el antes y el después, y una segunda grilla de sensibilidad (ABL × costos de entrada × vacancia). Calcula la banda cuantílica del KPI 4 y guarda el `.joblib` con metadata: versión de scikit-learn, fecha, hash de los datos de entrenamiento, predictoras y métricas. El modelo de alquiler no cambia. En el docstring, el apartado sobre las dummies de RegEx se atribuye a la 2da entrega |
+| `src/modelo_alquiler.py` | Se quitó el `main()`, un punto de entrada heredado de la 1ra entrega que no usaba nadie: aplicaba vacancia 8% y gastos 12% (no los de `supuestos.py`), escribía archivos que el pipeline no usa y pisaba `ranking_barrios.csv`. El docstring deja de citar un error de ~11,5%, que no es el vigente (11,2%). `calcular_rentabilidad` acepta gastos por propiedad. **El ranking de barrios se ordena por neta y no por bruta**, con desempate por nombre: con el ABL segmentado ya no es lo mismo, y el orden ya no cambia entre corridas. **La banda del KPI 4 es nueva**: regresión cuantílica calibrada por grupo de evidencia (`banda_cuantilica`) en lugar del error mediano del tramo. `entrenar_y_validar` devuelve sus métricas para la metadata del `.joblib`. El Ridge no cambia |
+| `src/supuestos.py` | Se quitaron constantes que ningún script ni notebook leía (`TOP_BARRIOS_HEATMAP` y tres `SCATTER_*`); la fecha de consulta y el umbral de completitud pasan a comentario. Nuevas secciones: radio de caminata y tramos de H2 (4b2), criterio para reemplazar el modelo (`MEJORA_MINIMA_R2`), nivel de significación de los tests (`ALFA`), ABL segmentado (3b2), costos de entrada (3e), refacción (3f) y riesgo legal como limitación (3g) y la función de decisión (4d: soporte del modelo, margen por liquidez y grillas de sensibilidad). **Se corrigieron dos errores heredados del ABL**: el ejemplo de ARS 43.994 es con coeficiente geográfico 1,75 y no 1,25, y la fuente no dice que una VFH de 15 a 25 millones sea "el rango de un 2 ambientes usado" |
+| `src/eda.py` | Se quitaron un import sin uso (`matplotlib.pyplot`), un color que no se usaba (`BUENO`) y tres funciones que solo usaban los notebooks de la 2da entrega y su informe (`leer_asimetria`, `cobertura_estratos`, `resumir_efecto`) |
+| `src/temporal.py` | Se quitó un import sin uso (`numpy`). `lado_remax()` acepta la ruta del dataset como parámetro. La neta tradicional y los fijos del temporal usan el ABL mediano de cada celda en lugar del plano, para que P3 use los mismos gastos que el KPI 2 |
+| `src/reporte.py` | **Reescrito con los hallazgos de esta entrega**, ordenados por cuánto cambian la decisión: la función de decisión, los costos de entrada, el modelo y su banda, los tests formales, los micro-mercados, el temporal, el sesgo de la cartera y H2. Solo quedan los hallazgos que cambian la decisión, y se listan los de la 2da que no siguen. Las cifras de los tests salen de `validacion.resumen_hipotesis`. Vuelve a ser parte del pipeline |
+| `src/sesgo.py` | Sin cambios |
+| `src/fuentes_externas.py` | Sin cambios |
+| `src/test_fuentes.py` | Resuelve las rutas desde la ubicación del archivo: antes solo corría desde la raíz de la entrega |
+| `src/test_supuestos.py` | Verifica el contrato nuevo del KPI 2 (gastos de cada propiedad = 10,24% + su ABL), la tabla de coeficientes geográficos (48 barrios, entre 0 y 2), la escala del Impuesto Inmobiliario y los rangos de los costos de entrada. Incluye un negativo: con el gasto plano, la neta del dataset no coincide |
+| `src/test_variables.py` | Sin cambios |
+| `src/test_eda.py` | Sin los tests de esas tres funciones. Los del efecto estratificado verifican `efecto_estratificado` con `mediana_ponderada`, que es lo que usan el informe y el notebook 02 |
+
+**Datos (`data/`)**
+
+| Archivo | Estado |
+|---|---|
+| `data/raw/dataset_maestro.csv` | Sin cambios. Es el crudo del scraping de la 1ra entrega (14.867 avisos, 16-08-2026) |
+| `data/external/` (7 tablas y `reporte_fuentes.txt`) | Sin cambios. Tablas agregadas y fechadas de IDECBA, Colegio de Escribanos, Inside Airbnb y Censo 2022 |
+| `data/reference/` (`ranking_barrios_entrega1.csv`, `LEEME.md`) | Sin cambios |
+| `data/processed/` — `auditoria_calidad.csv`, `reporte_limpieza.txt`, `reporte_regex.txt` | **Regenerados en esta carpeta** por `limpieza.py` y `variables.py`. Contenido idéntico al de la 2da entrega; los reportes cambian la fecha de corrida |
+| `data/processed/` — `dataset_analitico.csv`, `ranking_barrios.csv`, `modelo_alquiler.joblib`, `sensibilidad_supuestos.csv`, `reporte_kpis.txt` | **Regenerados con contenido nuevo** por `espacial.py` y `kpis.py`. `dataset_analitico.csv` suma 17 columnas (accesibilidad, costos y percentiles del alquiler) y pierde `error_estimacion`; `rent_neta_pct` usa el ABL segmentado y `rent_bruta_min` / `rent_bruta_max` salen de la banda cuantílica; el resto de las columnas heredadas no cambia. El ranking se ordena por neta. La sensibilidad suma la grilla B |
+| `data/processed/` — `temporal_vs_tradicional.csv`, `reporte_temporal.txt` | **Regenerados** por `temporal.py`, con el ABL segmentado |
+| `data/processed/` — `sesgo_precio_barrio.csv`, `sesgo_representacion_comuna.csv`, `reporte_sesgo.txt` | **Regenerados** por `sesgo.py` en la corrida completa. Contenido idéntico al de la 2da entrega: `sesgo.py` no usa la neta; el reporte cambia la fecha de corrida |
+| `data/processed/DICCIONARIO_DATOS.md` | El encabezado deja de presentar la matriz como "de la 2da pre-entrega". Se agregaron la sección 8.1 (ABL, costos y TIR), la 9 (accesibilidad), la 10 (función de decisión), los pasos nuevos del linaje, la fórmula nueva de `rent_neta_pct` y cuatro advertencias de uso |
+
+**Configuración**
+
+| Archivo | Estado |
+|---|---|
+| `requirements.txt` | Versiones exactas en lugar de mínimas. Se agregaron `openpyxl`, que `fuentes_externas.py` importa para leer los cuadros de IDECBA y del Colegio y no estaba declarado, y `streamlit`, para el tablero |
+| `.gitignore` | Se agregó `dataset_espacial.csv`, el intermedio nuevo del pipeline, y el comentario registra que `decision.py` también escribe en el dataset analítico |
+
+**Documentación**
+
+| Archivo | Estado |
+|---|---|
+| `informe/FUENTES_EXTERNAS.md` | Traído **en un segundo paso**, al incorporar las capas espaciales: no estaba en la copia inicial. Sale del mismo commit `24e09b6` y era idéntico al de la 2da entrega al traerlo. Se trajo en lugar de escribir un catálogo nuevo para que las fuentes 1 a 5, cuyas tablas sí están en `data/external/`, sigan documentadas en esta carpeta. Cambios: las fichas 6 a 9 (subte, tren, Metrobús, espacios verdes) reemplazan a la ficha "planificada" de transporte; se suma la sección sobre qué mide la distancia y qué no; el IPC pasa a ser la ficha 10, y las referencias al contexto apuntan al README de la 2da entrega |
+
+### No traído
+
+Los notebooks, los gráficos y el informe de hallazgos de la 2da entrega **no se
+copiaron**. Esta entrega tiene los suyos (ver [Cómo leer el trabajo](#cómo-leer-el-trabajo-los-notebooks)),
+y conserva solo los gráficos y hallazgos que cambian la decisión del inversor.
+
+### Construido en esta entrega
+
+| Archivo | Qué es |
+|---|---|
+| `src/espacial.py` | Fusión espacial y medida de accesibilidad. El cálculo de distancias (BallTree con métrica haversine, y la distancia a un polígono medida contra sus vértices) **se adaptó de `enriquecimiento.py`, de un repositorio previo del grupo** (`LladhonM/Analitica-Descriptiva`, commit `2f407b2`). Es nuevo: el Metrobús, la medida combinada, las capas versionadas, los reportes de cobertura y heterogeneidad, y que los parques excluyan los canteros centrales |
+| `src/test_espacial.py` | 52 tests de la fusión espacial, con negativos |
+| `src/accesibilidad.py` | H2: pendiente con y sin barrio fijo, perfil por tramos de distancia, radio de influencia y réplica del antecedente exploratorio |
+| `src/test_accesibilidad.py` | 8 tests de H2, sobre datos sintéticos con la respuesta conocida: el barrio fijo elimina la centralidad pura y el perfil recupera una penalidad plantada |
+| `src/costos.py` | Fórmulas del ABL segmentado (Ley 6927), costos de entrada, refacción y TIR a 5 años. Los números están en `supuestos.py` |
+| `src/test_costos.py` | 38 tests. El ABL se valida contra una referencia externa: los siete ejemplos que calcula Roomix con la Ley 6927 |
+| `data/processed/h2_perfil_distancia.csv`, `reporte_h2.txt` | Salida de `accesibilidad.py` |
+| `data/processed/antes_despues_kpis.csv` | Neta mediana, barrios sobre el piso y top 5, antes y después del ajuste |
+| `src/comparacion_modelos.py` | El modelo de alquiler contra una referencia simple, con variables espaciales y contra gradient boosting, fuera de muestra en tres semillas, y la cobertura de la banda anterior contra la nueva (`cobertura_banda.csv`) |
+| `src/test_modelo.py` | 25 tests: la calibración conformal sobre un caso sintético, la metadata del `.joblib` (con su hash contra los datos de entrada) y la coherencia de la banda |
+| `data/processed/comparacion_modelos.csv`, `cobertura_banda.csv`, `reporte_comparacion_modelos.txt` | Salida de `comparacion_modelos.py` |
+| `src/validacion.py` | Las piezas de los tests formales: Spearman por permutación, Holm, errores agrupados, Van Elteren y la pendiente con efectos fijos de celda con su bootstrap. `resumen_hipotesis` repite los cuatro tests con las semillas del notebook 04 para el informe |
+| `src/test_validacion.py` | 19 tests de esas piezas contra referencias independientes (scipy, la regresión con dummies, HC1), con negativos |
+| `src/sintesis.py` | PCA sobre las dummies, MCA con la corrección de Benzécri, micro-mercados por k-medias con su estabilidad, y la prima de cada grupo con precios observados |
+| `src/test_sintesis.py` | 18 tests: el MCA contra el chi-cuadrado de scipy y la fórmula de transición, los micro-mercados contra grupos plantados y la prima contra una prima plantada, con negativos |
+| `src/decision.py` | La función de decisión: P1, P2 y P3, su evaluación y su sensibilidad. Agrega 14 columnas al dataset analítico |
+| `src/test_decision.py` | 25 tests: la frontera y los pares de P2 contra la comparación de todos los pares, la neta central contra `kpis.py`, la ocupación de equilibrio contra `temporal.py`, con negativos |
+| `data/processed/decision_sensibilidad.csv`, `decision_p3.csv`, `reporte_decision.txt` | Salida de `decision.py` |
+| `notebooks/01` a `06` | Los notebooks de esta entrega (ver [Cómo leer el trabajo](#cómo-leer-el-trabajo-los-notebooks)) |
+| `graficos/01` a `15` | Los gráficos que guardan los notebooks |
+| `tablero/app.py` | La interfaz del tablero: encabezado, filtros y las cinco pestañas |
+| `tablero/datos.py` | La lógica del tablero: carga del dataset, filtros, medianas y etapas de la decisión. Importa `supuestos` y `eda` de `src/` |
+| `tablero/test_tablero.py` | 106 verificaciones de `datos.py`: las cifras de referencia sin filtros, cada filtro fila por fila, y negativos |
+| `tablero/.streamlit/config.toml` | El tema del tablero |
+| `data/processed/DISENO_TABLERO.md` | Diseño del tablero: paleta, pestañas, visualizaciones, filtros y comportamiento |
+| `data/processed/GUIA_TABLERO.md` | Qué columnas usa el tablero y cuáles son internas, y las limitaciones que van en pantalla |
+| `informe/INFORME_HALLAZGOS.md` | El informe de esta entrega, que emite `reporte.py` |
+| `data/external/transporte_estaciones.csv` | Bocas de subte, estaciones de tren y paradas de Metrobús, con fuente y fecha de descarga |
+| `data/external/espacios_verdes.csv`, `espacios_verdes_vertices.csv` | Plazas y parques, y los vértices de sus polígonos |
+| `data/processed/reporte_espacial.txt` | Log de `espacial.py`: capas, cobertura del dato, distancias, acceso por comuna y heterogeneidad por barrio |
+| `README.md` | Este archivo |
+
+Las capas se bajaron de Buenos Aires Data el 27-10-2026 y son idénticas, byte a byte, a
+las que usaba `enriquecimiento.py`: se volvieron a descargar de la fuente oficial, con
+fecha, en lugar de copiarse.
 
 ---
 
@@ -720,7 +810,8 @@ Los diez primeros scripts reconstruyen `data/processed/` y el informe a partir d
 `data/raw/dataset_maestro.csv`, en ese orden: `temporal.py` usa el ABL que calcula
 `kpis.py`, `comparacion_modelos.py` lee la banda del modelo que guarda `kpis.py`,
 `decision.py` necesita la salida de `temporal.py`, y `reporte.py` lee todo lo anterior.
-La corrida de los diez scripts tarda unos 3 minutos, y reproduce exactamente los valores versionados: en una corrida desde cero solo cambian las fechas de los reportes.
+La corrida de los diez scripts tarda unos 3 minutos y reproduce exactamente los valores
+versionados: en una corrida desde cero solo cambian las fechas de los reportes.
 
 Después, los notebooks, que leen esas salidas:
 
@@ -735,16 +826,21 @@ py -m nbconvert --to notebook --execute --inplace 06_decision.ipynb
 ```
 
 Los notebooks necesitan `dataset_espacial.csv` (el 03 lee de ahí los alquileres para la
-banda), que es intermedio y no se versiona: hay que correr antes el pipeline. Los intermedios (`dataset_limpio.csv`, `dataset_excluidos.csv`,
-`dataset_variables.csv`, `dataset_espacial.csv`) no se versionan.
+banda), que es intermedio y no se versiona: hay que correr antes el pipeline. Los
+intermedios (`dataset_limpio.csv`, `dataset_excluidos.csv`, `dataset_variables.csv`,
+`dataset_espacial.csv`) no se versionan.
 
 `espacial.py` usa las capas versionadas de `data/external/`, así que corre sin red. Con
 `--descargar` vuelve a bajarlas de Buenos Aires Data a `data/external/raw/` (no
 versionado; el archivo de espacios verdes pesa 15 MB) y rehace las capas con la fecha
 del día.
 
-**Cifras de referencia.** Una corrida correcta da exactamente estas cifras. Si alguna
-cambia, cambió el pipeline o una dependencia:
+El tablero no necesita el pipeline: lee el dataset versionado (ver
+[Cómo abrirlo](#cómo-abrirlo)).
+
+**Cifras de referencia.** Una corrida correcta da exactamente estas cifras, y el tablero
+las reproduce sin filtros (todo el rango de precios y todos los tipos). Si alguna cambia,
+cambió el pipeline o una dependencia:
 
 | Cifra | Valor | Respecto de la 2da entrega |
 |---|---|---|
@@ -762,18 +858,6 @@ cambia, cambió el pipeline o una dependencia:
 | Frontera de P2 | 140 propiedades; 7,2% de pares distinguibles | nueva |
 | `dataset_analitico.csv` | 12.097 × 128 | 98 columnas en la 2da |
 
-### Tablero
-
-```bash
-cd tablero
-streamlit run app.py
-```
-
-Se corre desde `tablero/` porque Streamlit lee el tema de `tablero/.streamlit/config.toml`
-en la carpeta desde donde se ejecuta. Lee `data/processed/dataset_analitico.csv`, que se
-versiona, así que no hace falta correr el pipeline antes. Sin filtros (todo el rango de
-precios y todos los tipos) reproduce las cifras de la tabla de arriba.
-
 ---
 
 ## Estructura
@@ -782,15 +866,16 @@ precios y todos los tipos) reproduce las cifras de la tabla de arriba.
 Entrega 3/
 ├── data/
 │   ├── raw/            dataset_maestro.csv, crudo sin modificar
-│   ├── processed/      dataset_analitico.csv, reportes, DICCIONARIO_DATOS.md, GUIA_TABLERO.md
+│   ├── processed/      dataset_analitico.csv, reportes, DICCIONARIO_DATOS.md,
+│   │                   GUIA_TABLERO.md, DISENO_TABLERO.md
 │   ├── external/       tablas fechadas de las fuentes externas y capas espaciales
 │   └── reference/      ranking de barrios de la 1ra entrega, para comparar
 ├── informe/            INFORME_HALLAZGOS.md, FUENTES_EXTERNAS.md
-├── notebooks/          01 accesibilidad, 02 costos, 03 modelo, 04 validación, 05 síntesis, 06 decisión (en orden de lectura)
+├── notebooks/          01 accesibilidad, 02 costos, 03 modelo, 04 validación,
+│                       05 síntesis, 06 decisión (en orden de lectura)
 ├── graficos/           los 15 gráficos que guardan los notebooks
 ├── src/                pipeline, supuestos y tests
 ├── tablero/            tablero en Streamlit: app.py, datos.py, test_tablero.py y el tema
 ├── requirements.txt
 └── README.md
 ```
-
